@@ -1,6 +1,6 @@
 # 1c-vector-search MCP Server
 
-MCP-сервер для семантического поиска по коду и метаданным конфигураций 1С (КА, ЗУП, УТ, ERP и т.п.). Работает локально через ChromaDB и SQLite, без Docker.
+MCP-сервер для семантического поиска по коду и метаданным конфигураций 1С (ЗУП, УТ, ERP и т.п.). Работает локально через ChromaDB и SQLite, без Docker.
 
 ## Состав проекта
 
@@ -22,13 +22,13 @@ MCP-сервер для семантического поиска по коду 
 ### 1. Установка зависимостей
 
 ```cmd
-cd 1c-vector-search-KA_Vector
+cd 1c-vector-search-Vector
 pip install -r requirements.txt
 ```
 
 ### 2. Настройка профиля
 
-1. Переименуйте `projects/your_project` в `projects/<имя_проекта>` (например, `KA_Vector`).
+1. Переименуйте `projects/your_project` в `projects/<имя_проекта>` (например, `Vector`).
 2. Переименуйте `your_project.env` в `<имя>.env`.
 3. Отредактируйте `.env`:
    - **CONFIG_PATH** — путь к выгрузке конфигурации 1С (корень, где лежит `Configuration.xml`)
@@ -57,16 +57,16 @@ python run_indexer.py --clear
 
 `Ctrl+Shift+P` → **"MCP: Edit Config File"**
 
-Добавьте в `mcpServers` (замените пути на актуальные):
+Добавьте в `mcpServers` (замените `C:\project` на путь к папке проекта):
 
 ```json
 "1c-vector-search": {
   "command": "cmd",
-  "args": ["/c", "C:\\path\\to\\1c-vector-search-KA_Vector\\run_server_your_project.cmd"],
+  "args": ["/c", "C:\\project\\run_server_your_project.cmd"],
   "env": {
     "PROJECT_PROFILE": "your_project",
-    "VECTORDB_PATH": "C:\\path\\to\\1c-vector-search-KA_Vector\\projects\\your_project\\vectordb",
-    "GRAPHDB_PATH": "C:\\path\\to\\1c-vector-search-KA_Vector\\projects\\your_project\\graphdb\\graph.db"
+    "VECTORDB_PATH": "C:\\project\\projects\\your_project\\vectordb",
+    "GRAPHDB_PATH": "C:\\project\\projects\\your_project\\graphdb\\graph.db"
   },
   "description": "MCP сервер для семантического поиска по конфигурации 1С"
 }

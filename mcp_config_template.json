@@ -2,11 +2,11 @@
   "mcpServers": {
     "1c-vector-search": {
       "command": "cmd",
-      "args": ["/c", "C:\\path\\to\\1c-vector-search-KA_Vector\\run_server_your_project.cmd"],
+      "args": ["/c", "C:\\project\\run_server_your_project.cmd"],
       "env": {
         "PROJECT_PROFILE": "your_project",
-        "VECTORDB_PATH": "C:\\path\\to\\1c-vector-search-KA_Vector\\projects\\your_project\\vectordb",
-        "GRAPHDB_PATH": "C:\\path\\to\\1c-vector-search-KA_Vector\\projects\\your_project\\graphdb\\graph.db"
+        "VECTORDB_PATH": "C:\\project\\projects\\your_project\\vectordb",
+        "GRAPHDB_PATH": "C:\\project\\projects\\your_project\\graphdb\\graph.db"
       },
       "description": "MCP сервер для семантического поиска по конфигурации 1С"
     }

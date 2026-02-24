@@ -8,7 +8,7 @@
 
 2. **Установите зависимости:**
    ```cmd
-   cd 1c-vector-search-KA_Vector
+   cd 1c-vector-search-Vector
    pip install -r requirements.txt
    ```
 
