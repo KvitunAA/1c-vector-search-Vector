@@ -1,0 +1,20 @@
+# MCP Server для работы с конфигурацией 1С через векторную БД
+# Требуется Python 3.10+
+
+# MCP SDK
+mcp>=0.9.0
+
+# Векторная БД
+chromadb>=0.4.22
+
+# Эмбеддинги
+sentence-transformers>=2.3.1
+
+# Парсинг XML
+lxml>=5.1.0
+
+# Утилиты
+python-dotenv>=1.0.0
+pydantic>=2.5.0
+loguru>=0.7.0
+tqdm>=4.66.0

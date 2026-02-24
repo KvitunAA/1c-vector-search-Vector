@@ -1,71 +1,109 @@
-# 1c-vector-search MCP Server (универсальный шаблон)
+# 1c-vector-search MCP Server
 
-Этот проект — **обезличенный универсальный шаблон** MCP-сервера `1c-vector-search` для семантического поиска по коду и
-метаданным любых конфигураций 1С (КА, ЗУП, УТ, ERP и т.п.).
-Все параметры развертывания (адреса хостов, пути к базам/файлам, имена моделей) приведены в виде **шаблонов** и должны быть
-заданы в вашем окружении.
+MCP-сервер для семантического поиска по коду и метаданным конфигураций 1С (КА, ЗУП, УТ, ERP и т.п.). Работает локально через ChromaDB и SQLite, без Docker.
 
 ## Состав проекта
 
-- `SERVER_METADATA.json` — описание MCP-сервера для клиента (Cursor и т.п.).
-- `tools/*.json` — схема MCP-инструментов (search_1c_code, search_1c_metadata и др.).
-- `docker-compose.yml` — пример docker-compose для запуска векторной БД и MCP-приложения.
-- `.env.example` — пример файла переменных окружения с ОБЕЗЛИЧЕННЫМИ значениями.
-- `data/` (создается пользователем) — каталог с артефактами/данными 1С для индексации.
+- **Python-модули** — полная реализация MCP-сервера, индексатора и графа зависимостей:
+  - `server.py` — MCP-сервер (stdio-транспорт для Cursor)
+  - `config.py` — загрузка конфигурации из профилей
+  - `vectordb_manager.py` — работа с ChromaDB
+  - `graph_db.py` — граф зависимостей (SQLite)
+  - `parser_1c.py` — парсер BSL и XML метаданных 1С
+  - `index_config.py` — индексация кода, метаданных, форм и графа
+  - `index_graph.py` — индексация только графа
+  - `run_server.py`, `run_indexer.py` — точки входа
+- **Профили** — `projects/your_project/` — шаблон с обезличенными параметрами
+- **Скрипты** — `run_server_your_project.cmd`, `run_index_your_project.cmd`, `run_index_graph_your_project.cmd`
+- **Схемы MCP** — `SERVER_METADATA.json`, `tools/*.json` — описание инструментов для клиентов
 
-## Обезличивание параметров
+## Быстрый старт
 
-В этом шаблоне:
+### 1. Установка зависимостей
 
-- **Не указаны реальные адреса и пути** — вместо них используются плейсхолдеры (`your-vector-db-host`, `your_vector_db_user` и т.п.).
-- **Не указаны реальные имена моделей** — используется абстрактное `EMBEDDING_MODEL_NAME=your-embedding-model-name`.
-- **Не зашиты реальные порты/пароли** — все чувствительные данные выносите в `.env`, который **не** коммитится в GitHub.
-
-При установке на любом окружении:
-
-1. Скопируйте этот каталог в свой репозиторий (например, на GitHub).
-2. Переименуйте образы в `docker-compose.yml`:
-   - `your-vector-db-image:latest` → образ вашей векторной БД.
-   - `your-mcp-app-image:latest` → образ вашего MCP-приложения с реализацией вызовов.
-3. Создайте файл `.env` на основе `.env.example` и пропишите в нем реальные значения:
-   - `VECTOR_DB_URL`, `VECTOR_DB_USER`, `VECTOR_DB_PASSWORD`, `VECTOR_DB_API_KEY`
-   - `EMBEDDING_MODEL_NAME`
-   - `MCP_USE_SSE`
-4. Поместите данные 1С для индексации в папку `data/` (структуру и формат вы определяете в своей реализации).
-
-## Запуск через Docker Compose
-
-```bash
+```cmd
 cd 1c-vector-search-KA_Vector
-cp .env.example .env
-# отредактируйте .env, затем:
-docker compose up -d
+pip install -r requirements.txt
 ```
 
-После запуска MCP-приложение будет доступно по порту `8007` (по умолчанию, см. `docker-compose.yml`).
+### 2. Настройка профиля
 
-## Подключение MCP-сервера в Cursor
+1. Переименуйте `projects/your_project` в `projects/<имя_проекта>` (например, `KA_Vector`).
+2. Переименуйте `your_project.env` в `<имя>.env`.
+3. Отредактируйте `.env`:
+   - **CONFIG_PATH** — путь к выгрузке конфигурации 1С (корень, где лежит `Configuration.xml`)
+   - **EMBEDDING_API_BASE** — URL API эмбеддингов (LM Studio, LocalAI и т.д.), или оставьте пустым для локальной модели
+   - **EMBEDDING_MODEL** — имя модели эмбеддингов
+   - **EMBEDDING_DIMENSION** — размерность векторов (768 для nomic, 4096 для Qwen3 и т.п.)
 
-В конфигурации MCP-клиента (например, Cursor) укажите:
+### 3. Переименование скриптов (опционально)
 
-- `serverIdentifier`: `1c-vector-search`
-- `serverName`: `1c-vector-search`
-- URL транспорта MCP: `http://localhost:8007` (или ваш реальный адрес, если измените порт/хост).
+Переименуйте `run_server_your_project.cmd` → `run_server_<имя>.cmd` и аналогично `run_index_*.cmd`, `run_index_graph_*.cmd`. Либо используйте `init_project.py` для создания нового проекта.
+
+### 4. Индексация
+
+```cmd
+run_index_your_project.cmd
+```
+
+Или через Python:
+
+```cmd
+set PROJECT_PROFILE=your_project
+python run_indexer.py --clear
+```
+
+### 5. Подключение в Cursor
+
+`Ctrl+Shift+P` → **"MCP: Edit Config File"**
+
+Добавьте в `mcpServers` (замените пути на актуальные):
+
+```json
+"1c-vector-search": {
+  "command": "cmd",
+  "args": ["/c", "C:\\path\\to\\1c-vector-search-KA_Vector\\run_server_your_project.cmd"],
+  "env": {
+    "PROJECT_PROFILE": "your_project",
+    "VECTORDB_PATH": "C:\\path\\to\\1c-vector-search-KA_Vector\\projects\\your_project\\vectordb",
+    "GRAPHDB_PATH": "C:\\path\\to\\1c-vector-search-KA_Vector\\projects\\your_project\\graphdb\\graph.db"
+  },
+  "description": "MCP сервер для семантического поиска по конфигурации 1С"
+}
+```
+
+### 6. Запуск MCP
+
+Cursor запускает MCP-сервер автоматически при обращении к инструментам. Для проверки можно запустить вручную:
+
+```cmd
+run_server_your_project.cmd
+```
+
+## Обезличенные параметры
+
+В шаблоне используются плейсхолдеры:
+
+- **CONFIG_PATH** — `C:\path\to\your\1c\config`
+- **EMBEDDING_API_BASE** — `http://your-host:port/v1`
+- **EMBEDDING_MODEL** — `your-embedding-model-name`
+- **VECTOR_PYTHON_PATH** (в `local.env`) — `C:\path\to\python.exe`
+
+Файлы `*.env.local` и `local.env` не коммитятся в Git.
+
+## Перенос на другую машину
+
+См. [PORTABILITY.md](PORTABILITY.md) — использование `setup_machine.py`, переопределение путей в `*.env.local`.
 
 ## Инструменты (tools)
 
-Все файлы схем MCP-инструментов находятся в каталоге `tools/` и описывают универсальный набор инструментов для
-семантического поиска по коду и метаданным 1С:
+- `search_1c_code` — семантический поиск по коду 1С
+- `search_1c_metadata` — поиск объектов метаданных
+- `search_1c_forms` — поиск форм
+- `search_by_object_name` — полная информация по объекту
+- `find_1c_method_usage` — поиск мест использования метода
+- `graph_dependencies`, `graph_references`, `graph_stats` — анализ графа зависимостей
+- `get_vectordb_stats` — статистика векторной БД
+- `get_analyst_instructions` — инструкция для аналитика
 
-- `search_1c_code.json` — семантический поиск по коду 1С.
-- `search_1c_metadata.json` — поиск объектов метаданных 1С.
-- `search_1c_forms.json` — поиск форм конфигурации.
-- `search_by_object_name.json` — полная информация по объекту конфигурации.
-- `find_1c_method_usage.json` — поиск мест использования метода.
-- `graph_stats.json`, `graph_references.json`, `graph_dependencies.json` — инструменты анализа графа зависимостей.
-- `get_vectordb_stats.json` — статистика по векторной БД.
-- `get_analyst_instructions.json` — инструкция для аналитика по использованию MCP.
-
-Вы можете использовать эти JSON-файлы как есть для описания инструментов MCP-сервера — они не содержат
-привязки к конкретным адресам/базам/моделям и не требуют обезличивания.
-
+Подробное описание — в `projects/your_project/ИнструкцияПоИспользованиюMCP.md`.
