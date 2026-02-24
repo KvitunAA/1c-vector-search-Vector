@@ -1,0 +1,21 @@
+{
+  "name": "search_by_object_name",
+  "description": "Получить всю информацию о конкретном объекте конфигурации по его имени. Вернет метаданные и весь код, связанный с этим объектом.",
+  "arguments": {
+    "type": "object",
+    "properties": {
+      "object_name": {
+        "type": "string",
+        "description": "Точное имя объекта (например: 'Номенклатура', 'РеализацияТоваровУслуг')"
+      },
+      "include_code": {
+        "type": "boolean",
+        "description": "Включить код модулей объекта",
+        "default": true
+      }
+    },
+    "required": [
+      "object_name"
+    ]
+  }
+}

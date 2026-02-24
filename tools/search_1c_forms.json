@@ -1,0 +1,23 @@
+{
+  "name": "search_1c_forms",
+  "description": "Поиск форм 1С по описанию или названию",
+  "arguments": {
+    "type": "object",
+    "properties": {
+      "query": {
+        "type": "string",
+        "description": "Описание или название формы"
+      },
+      "limit": {
+        "type": "integer",
+        "description": "Количество результатов",
+        "default": 5,
+        "minimum": 1,
+        "maximum": 20
+      }
+    },
+    "required": [
+      "query"
+    ]
+  }
+}

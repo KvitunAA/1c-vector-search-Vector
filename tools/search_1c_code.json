@@ -1,0 +1,28 @@
+{
+  "name": "search_1c_code",
+  "description": "Семантический поиск по коду модулей 1С. Найдет процедуры, функции и фрагменты кода по описанию на естественном языке. Например: 'проведение документа', 'расчет НДС', 'работа с файлами'",
+  "arguments": {
+    "type": "object",
+    "properties": {
+      "query": {
+        "type": "string",
+        "description": "Описание искомого кода или функциональности"
+      },
+      "limit": {
+        "type": "integer",
+        "description": "Количество результатов (по умолчанию 5)",
+        "default": 5,
+        "minimum": 1,
+        "maximum": 20
+      },
+      "only_export": {
+        "type": "boolean",
+        "description": "Искать только экспортные методы",
+        "default": false
+      }
+    },
+    "required": [
+      "query"
+    ]
+  }
+}

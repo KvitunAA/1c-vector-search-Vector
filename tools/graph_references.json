@@ -1,0 +1,16 @@
+{
+  "name": "graph_references",
+  "description": "Анализ ссылок: на какие объекты ссылается указанный объект. Показывает зависимости объекта (что он использует).",
+  "arguments": {
+    "type": "object",
+    "properties": {
+      "object_name": {
+        "type": "string",
+        "description": "Имя объекта метаданных"
+      }
+    },
+    "required": [
+      "object_name"
+    ]
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "name": "find_1c_method_usage",
+  "description": "Найти где используется конкретный метод (процедура/функция) в конфигурации. Поиск по имени метода в коде других модулей.",
+  "arguments": {
+    "type": "object",
+    "properties": {
+      "method_name": {
+        "type": "string",
+        "description": "Имя процедуры или функции для поиска"
+      },
+      "limit": {
+        "type": "integer",
+        "description": "Максимальное количество результатов",
+        "default": 10,
+        "minimum": 1,
+        "maximum": 50
+      }
+    },
+    "required": [
+      "method_name"
+    ]
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "name": "search_1c_metadata",
+  "description": "Поиск объектов метаданных 1С (справочники, документы, регистры и т.д.). Ищет по названию, синониму или описанию объекта.",
+  "arguments": {
+    "type": "object",
+    "properties": {
+      "query": {
+        "type": "string",
+        "description": "Название или описание объекта метаданных"
+      },
+      "object_type": {
+        "type": "string",
+        "description": "Тип объекта метаданных для фильтрации",
+        "enum": [
+          "Catalogs",
+          "Documents",
+          "InformationRegisters",
+          "AccumulationRegisters",
+          "AccountingRegisters",
+          "DataProcessors",
+          "Reports",
+          "CommonModules",
+          "Enums",
+          "ChartsOfAccounts",
+          "Все"
+        ],
+        "default": "Все"
+      },
+      "limit": {
+        "type": "integer",
+        "description": "Количество результатов",
+        "default": 5,
+        "minimum": 1,
+        "maximum": 20
+      }
+    },
+    "required": [
+      "query"
+    ]
+  }
+}

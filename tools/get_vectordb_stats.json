@@ -1,0 +1,8 @@
+{
+  "name": "get_vectordb_stats",
+  "description": "Получить статистику по векторной БД (количество проиндексированных объектов)",
+  "arguments": {
+    "type": "object",
+    "properties": {}
+  }
+}
