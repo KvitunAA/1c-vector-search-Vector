@@ -64,7 +64,24 @@ class Config:
     EMBEDDING_API_BASE = os.getenv("EMBEDDING_API_BASE", "")
     EMBEDDING_API_KEY = os.getenv("EMBEDDING_API_KEY", "dummy")
     EMBEDDING_ADD_EOS_MANUAL = os.getenv("EMBEDDING_ADD_EOS_MANUAL", "false").lower() in ("true", "1", "yes")
-    EMBEDDING_MAX_CHARS = int(os.getenv("EMBEDDING_MAX_CHARS", "0"))
+    _CHARS_PER_TOKEN = 2.0
+    _chunk_max_tokens = os.getenv("CHUNK_MAX_TOKENS", "")
+    _chunk_max_chars_env = os.getenv("CHUNK_MAX_CHARS", "0")
+    CHUNK_MAX_TOKENS = int(_chunk_max_tokens) if _chunk_max_tokens and _chunk_max_tokens.isdigit() else 0
+    CHUNK_MAX_CHARS = (
+        int(CHUNK_MAX_TOKENS * _CHARS_PER_TOKEN) if CHUNK_MAX_TOKENS
+        else int(_chunk_max_chars_env) if _chunk_max_chars_env and _chunk_max_chars_env.isdigit()
+        else 1024
+    )
+    CHUNK_OVERLAP_TOKENS = int(os.getenv("CHUNK_OVERLAP_TOKENS", "100"))
+    CHUNK_OVERLAP_CHARS = int(CHUNK_OVERLAP_TOKENS * _CHARS_PER_TOKEN)
+    _max_tokens_str = os.getenv("EMBEDDING_MAX_TOKENS", "")
+    _max_chars_env = os.getenv("EMBEDDING_MAX_CHARS", "0")
+    EMBEDDING_MAX_TOKENS = int(_max_tokens_str) if _max_tokens_str and _max_tokens_str.isdigit() else 0
+    EMBEDDING_MAX_CHARS = (
+        int(EMBEDDING_MAX_TOKENS * _CHARS_PER_TOKEN) if EMBEDDING_MAX_TOKENS
+        else int(_max_chars_env)
+    )
 
     COLLECTION_CODE = "1c_code"
     COLLECTION_METADATA = "1c_metadata"
@@ -129,8 +146,14 @@ class Config:
             logger.info(f"API эмбеддингов: {cls.EMBEDDING_API_BASE}")
         if "Qwen3" in cls.EMBEDDING_MODEL:
             logger.info(f"EMBEDDING_ADD_EOS_MANUAL: {cls.EMBEDDING_ADD_EOS_MANUAL}")
-        if cls.EMBEDDING_MAX_CHARS > 0:
+        if cls.EMBEDDING_MAX_TOKENS:
+            logger.info(f"EMBEDDING_MAX_TOKENS: {cls.EMBEDDING_MAX_TOKENS} → EMBEDDING_MAX_CHARS: {cls.EMBEDDING_MAX_CHARS}")
+        elif cls.EMBEDDING_MAX_CHARS > 0:
             logger.info(f"EMBEDDING_MAX_CHARS (обрезание чанков): {cls.EMBEDDING_MAX_CHARS}")
+        chunk_info = f"макс. {cls.CHUNK_MAX_CHARS} символов"
+        if cls.CHUNK_MAX_TOKENS:
+            chunk_info = f"макс. {cls.CHUNK_MAX_TOKENS} токенов (~{cls.CHUNK_MAX_CHARS} символов)"
+        logger.info(f"Чанки: {chunk_info}, нахлёст {cls.CHUNK_OVERLAP_TOKENS} токенов (~{cls.CHUNK_OVERLAP_CHARS} символов)")
         logger.info(f"Лимит поиска по умолчанию: {cls.DEFAULT_SEARCH_LIMIT}")
         logger.info(f"Максимальный лимит поиска: {cls.MAX_SEARCH_LIMIT}")
         logger.info(f"Уровень логирования: {cls.LOG_LEVEL}")

@@ -91,6 +91,53 @@ run_server_your_project.cmd
 
 Файлы `*.env.local` и `local.env` не коммитятся в Git.
 
+---
+
+## Настройки эмбеддингов: модель, URL, API
+
+Файл конфигурации профиля: `projects/<имя>/<имя>.env` или `projects/<имя>/<имя>.env.local` (переопределяет .env).
+
+### Вариант 1: Удалённый API (LM Studio, LocalAI, OpenAI-совместимый)
+
+| Параметр | Где подменять | Описание |
+|----------|---------------|----------|
+| `EMBEDDING_API_BASE` | **Подставьте URL** вашего API | Базовый URL, например `http://192.168.0.1:1234/v1` для LM Studio |
+| `EMBEDDING_MODEL` | **Подставьте имя модели** | Имя модели в API, например `text-embedding-nomic-embed-text-v2-moe` |
+| `EMBEDDING_API_KEY` | **Подставьте ключ** (или оставьте `dummy`) | Для локальных серверов (LM Studio, LocalAI) обычно `dummy` или `not-needed` |
+| `EMBEDDING_DIMENSION` | По модели | Размерность вектора (768 для nomic-embed-text-v2-moe) |
+| `EMBEDDING_ADD_EOS_MANUAL` | Для Qwen3 | `true` — добавлять EOS-токен вручную; для LM Studio/llama.cpp чаще `false` |
+
+### Вариант 2: Локальная модель (sentence-transformers)
+
+| Параметр | Значение | Описание |
+|----------|----------|----------|
+| `EMBEDDING_API_BASE` | **Оставьте пустым** или не задавайте | Пустое значение переключает на локальную модель |
+| `EMBEDDING_MODEL` | **Подставьте имя модели** | Имя из Hugging Face, например `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` |
+
+---
+
+## Настройки токенов и чанков
+
+Коэффициент символов на токен для BSL/русского: **2.0** (в `config.py`).
+
+| Параметр | Где подменять | Описание |
+|----------|---------------|----------|
+| `EMBEDDING_MAX_TOKENS` | В `.env` профиля | Макс. токенов контекста модели. Если задан — `EMBEDDING_MAX_CHARS = tokens × 2.0`. Пример: `512` для nomic-embed-text-v2-moe |
+| `CHUNK_MAX_TOKENS` | В `.env` профиля | Макс. токенов в одном чанке кода. Пример: `512` (~1024 символов) |
+| `CHUNK_OVERLAP_TOKENS` | В `.env` профиля | Нахлёст между чанками в токенах. По умолчанию: `100` |
+| `CHUNK_MAX_CHARS` | Альтернатива | Макс. символов в чанке, если не задан `CHUNK_MAX_TOKENS` |
+| `EMBEDDING_MAX_CHARS` | Альтернатива | Макс. символов для обрезки, если не задан `EMBEDDING_MAX_TOKENS` |
+
+### Пример для nomic-embed-text-v2-moe (Context Length 512 токенов)
+
+```env
+EMBEDDING_MAX_TOKENS=512
+CHUNK_MAX_TOKENS=512
+CHUNK_OVERLAP_TOKENS=100
+```
+
+---
+
 ## Перенос на другую машину
 
 См. [PORTABILITY.md](PORTABILITY.md) — использование `setup_machine.py`, переопределение путей в `*.env.local`.
