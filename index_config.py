@@ -27,10 +27,17 @@ logger = logging.getLogger(__name__)
 class ConfigIndexer:
     """Индексатор конфигурации 1С"""
 
-    def __init__(self, config_path: str, db_path: str = None, clear_existing: bool = False):
+    def __init__(
+        self,
+        config_path: str,
+        db_path: str = None,
+        clear_existing: bool = False,
+        skip_graph: bool = False,
+    ):
         self.config_path = Path(config_path)
         self.scanner = ConfigurationScanner(self.config_path)
         self.db_manager = VectorDBManager(db_path)
+        self.skip_graph = skip_graph
 
         if clear_existing:
             logger.info("Очистка существующей векторной БД...")
@@ -52,8 +59,12 @@ class ConfigIndexer:
         logger.info("\n[3/4] Индексация форм...")
         forms_count = self._index_forms()
 
-        logger.info("\n[4/4] Индексация графа связей...")
-        graph_stats = self._index_graph()
+        if self.skip_graph:
+            logger.info("\n[4/4] Индексация графа — пропущена (--skip-graph)")
+            graph_stats = {"nodes_count": 0, "edges_count": 0}
+        else:
+            logger.info("\n[4/4] Индексация графа связей...")
+            graph_stats = self._index_graph()
 
         logger.info("\n" + "=" * 80)
         logger.info("Индексация завершена!")
@@ -179,6 +190,11 @@ def main():
         action='store_true',
         help='Очистить существующую БД перед индексацией'
     )
+    parser.add_argument(
+        '--skip-graph',
+        action='store_true',
+        help='Индексировать только векторную БД (код, метаданные, формы), без графа'
+    )
 
     args = parser.parse_args()
 
@@ -197,7 +213,8 @@ def main():
         indexer = ConfigIndexer(
             config_path=args.config_path,
             db_path=args.db_path,
-            clear_existing=args.clear
+            clear_existing=args.clear,
+            skip_graph=args.skip_graph,
         )
         indexer.index_all()
     except KeyboardInterrupt:

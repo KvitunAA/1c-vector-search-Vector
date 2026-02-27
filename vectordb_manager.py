@@ -63,7 +63,8 @@ class VectorDBManager:
                 logger.info(f"Эмбеддинги через API: {Config.EMBEDDING_API_BASE}, модель: {Config.EMBEDDING_MODEL}")
         else:
             self.embedding_function = embedding_functions.SentenceTransformerEmbeddingFunction(
-                model_name=Config.EMBEDDING_MODEL
+                model_name=Config.EMBEDDING_MODEL,
+                trust_remote_code=True
             )
             logger.info(f"Эмбеддинги локально: {Config.EMBEDDING_MODEL}")
 
