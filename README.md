@@ -169,6 +169,7 @@ CHUNK_OVERLAP_TOKENS=100
 - **MODEL_CONFIGURATION_RECOMMENDATIONS.md** — рекомендации по выбору моделей эмбеддингов (nomic, BGE-M3, Qwen3), настройке чанков и контекста в зависимости от объёма RAM (8/16/32/48 GB).
 - **Раздельная индексация** — `run_index_vector_*.cmd` (только векторная БД), `run_index_graph_*.cmd` (только граф). Полная индексация — `python run_indexer.py --clear` без `--vector-only`.
 - **init_project.py** — создание нового проекта: `python init_project.py -n my_project -c "D:\Path\To\1C\Config" --add-mcp --index -y`.
+- **EMBEDDING_ADD_EOS_MANUAL для Qwen3** — в MCP_SETUP, README профиля, `your_project.env` и `projects/README.md` добавлены инструкции: при Qwen3 через LM Studio/GGUF раскомментировать и установить `EMBEDDING_ADD_EOS_MANUAL=true` (устраняет предупреждение EOS).
 
 ---
 
