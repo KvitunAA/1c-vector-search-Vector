@@ -8,7 +8,7 @@
 
 2. **Установите зависимости:**
    ```cmd
-   cd 1c-vector-search-Vector
+   cd 1c-vector-search
    pip install -r requirements.txt
    ```
 

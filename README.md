@@ -24,7 +24,7 @@ MCP-сервер для семантического поиска по коду 
 ### 1. Установка зависимостей
 
 ```cmd
-cd 1c-vector-search-Vector
+cd 1c-vector-search
 pip install -r requirements.txt
 ```
 
