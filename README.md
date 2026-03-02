@@ -36,7 +36,7 @@ pip install -r requirements.txt
    - **CONFIG_PATH** — путь к выгрузке конфигурации 1С (корень, где лежит `Configuration.xml`)
    - **EMBEDDING_API_BASE** — URL API эмбеддингов (LM Studio, LocalAI и т.д.), или оставьте пустым для локальной модели
    - **EMBEDDING_MODEL** — имя модели эмбеддингов
-   - **EMBEDDING_DIMENSION** — размерность векторов (768 для nomic, 4096 для Qwen3 и т.п.)
+   - **EMBEDDING_DIMENSION** — определяется автоматически по модели (см. `KNOWN_MODELS` в `config.py`). Задавайте явно, только если модель не распознана
 
 ### 3. Переименование скриптов (опционально)
 
@@ -114,8 +114,8 @@ run_server_your_project.cmd
 | `EMBEDDING_API_BASE` | **Подставьте URL** вашего API | Базовый URL, например `http://192.168.0.1:1234/v1` для LM Studio |
 | `EMBEDDING_MODEL` | **Подставьте имя модели** | Имя модели в API, например `text-embedding-nomic-embed-text-v2-moe` |
 | `EMBEDDING_API_KEY` | **Подставьте ключ** (или оставьте `dummy`) | Для локальных серверов (LM Studio, LocalAI) обычно `dummy` или `not-needed` |
-| `EMBEDDING_DIMENSION` | По модели | Размерность вектора (768 для nomic-embed-text-v2-moe) |
-| `EMBEDDING_ADD_EOS_MANUAL` | Для Qwen3 | `true` — добавлять EOS-токен вручную; для LM Studio/llama.cpp чаще `false` |
+| `EMBEDDING_DIMENSION` | Автоопределяется | Размерность вектора; определяется по имени модели (30+ моделей). Задавайте явно, только если модель не в `KNOWN_MODELS` |
+| `EMBEDDING_ADD_EOS_MANUAL` | Для Qwen3 | `false` (по умолчанию); `true` приводит к двойному EOS с llama.cpp |
 
 ### Вариант 2: Локальная модель (sentence-transformers)
 
@@ -179,20 +179,22 @@ CHUNK_OVERLAP_TOKENS=100
 | Параметр | Описание | По умолчанию |
 |----------|----------|--------------|
 | `VECTOR_DISTANCE_METRIC` | Метрика: `cosine`, `l2`, `ip` | `cosine` |
-| `HYBRID_SEARCH_ALPHA` | Доля векторного поиска (1 — только вектор, 0 — только BM25) | `1.0` |
-| `SEARCH_USE_MMR` | Maximal Marginal Relevance для разнообразия | `false` |
-| `MMR_LAMBDA` | Баланс релевантности/разнообразия (0–1) | `0.5` |
+| `HYBRID_SEARCH_ALPHA` | Доля векторного поиска (1 — только вектор, 0 — только BM25) | `0.7` |
+| `SEARCH_USE_MMR` | Maximal Marginal Relevance для разнообразия | `true` |
+| `MMR_LAMBDA` | Баланс релевантности/разнообразия (0–1) | `0.7` |
 | `SEARCH_FETCH_K` | Количество кандидатов для re-ranking | `50` |
+
+> **Гибридный поиск и MMR включены по умолчанию.** При необходимости переопределите в `.env`. Если `rank_bm25` не установлен — будет fallback на чистый вектор с предупреждением.
 
 **Примечание:** Смена `VECTOR_DISTANCE_METRIC` требует переиндексации (`--clear`).
 
-**find_1c_method_usage:** при заданном `CONFIG_PATH` используется grep по исходникам; иначе — семантический поиск.
+**find_1c_method_usage:** при заданном `CONFIG_PATH` используется grep по исходникам + обогащение из графа зависимостей; иначе — семантический поиск.
 
 ### Что сделать после обновления
 
 1. **Установить зависимость:** `pip install rank_bm25`
 2. **Переиндексировать** при смене `VECTOR_DISTANCE_METRIC`: `python run_indexer.py --clear --vector-only`
-3. **Для гибридного поиска** задать в `.env`: `HYBRID_SEARCH_ALPHA=0.7`
+3. Гибридный поиск и MMR включены по умолчанию — ручная настройка не требуется
 
 ---
 
