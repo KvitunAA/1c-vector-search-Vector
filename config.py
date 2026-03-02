@@ -41,6 +41,75 @@ def load_profile(profile_name: str = None):
 current_profile = load_profile()
 
 
+KNOWN_MODELS = {
+    "nomic-ai/nomic-embed-text-v1.5":              {"dim": 768,  "max_tokens": 8192},
+    "nomic-ai/nomic-embed-text-v1":                {"dim": 768,  "max_tokens": 8192},
+    "nomic-embed-text-v1.5":                       {"dim": 768,  "max_tokens": 8192},
+    "nomic-embed-text-v1":                         {"dim": 768,  "max_tokens": 8192},
+    "nomic-embed-text-v2-moe":                     {"dim": 768,  "max_tokens": 512},
+    "sentence-transformers/paraphrase-multilingual-minilm-l12-v2": {"dim": 384, "max_tokens": 512},
+    "paraphrase-multilingual-minilm-l12-v2":       {"dim": 384,  "max_tokens": 512},
+    "sentence-transformers/all-minilm-l6-v2":      {"dim": 384,  "max_tokens": 256},
+    "all-minilm-l6-v2":                            {"dim": 384,  "max_tokens": 256},
+    "baai/bge-m3":                                 {"dim": 1024, "max_tokens": 8192},
+    "bge-m3":                                      {"dim": 1024, "max_tokens": 8192},
+    "baai/bge-small-en-v1.5":                      {"dim": 384,  "max_tokens": 512},
+    "baai/bge-base-en-v1.5":                       {"dim": 768,  "max_tokens": 512},
+    "baai/bge-large-en-v1.5":                      {"dim": 1024, "max_tokens": 512},
+    "intfloat/multilingual-e5-large":              {"dim": 1024, "max_tokens": 512},
+    "intfloat/multilingual-e5-base":               {"dim": 768,  "max_tokens": 512},
+    "intfloat/multilingual-e5-small":              {"dim": 384,  "max_tokens": 512},
+    "intfloat/e5-mistral-7b-instruct":             {"dim": 4096, "max_tokens": 32768},
+    "jinaai/jina-embeddings-v3":                   {"dim": 1024, "max_tokens": 8192},
+    "jinaai/jina-embeddings-v2-base-en":           {"dim": 768,  "max_tokens": 8192},
+    "cohere/embed-multilingual-v3.0":              {"dim": 1024, "max_tokens": 512},
+    "cohere/embed-english-v3.0":                   {"dim": 1024, "max_tokens": 512},
+    "text-embedding-ada-002":                      {"dim": 1536, "max_tokens": 8191},
+    "text-embedding-3-small":                      {"dim": 1536, "max_tokens": 8191},
+    "text-embedding-3-large":                      {"dim": 3072, "max_tokens": 8191},
+    "ibm-granite/granite-embedding-125m-english":  {"dim": 768,  "max_tokens": 512},
+    "ibm-granite/granite-embedding-30m-english":   {"dim": 384,  "max_tokens": 512},
+}
+
+QWEN3_DIMENSIONS = {
+    "0.6b": 1024,
+    "1.7b": 2048,
+    "4b":   2560,
+    "8b":   4096,
+}
+
+
+def _resolve_embedding_dimension(model_name: str, env_dim: str) -> int:
+    """Определяет размерность эмбеддингов: env > таблица > Qwen3-эвристика > 768."""
+    if env_dim and env_dim.isdigit() and int(env_dim) > 0:
+        return int(env_dim)
+
+    model_lower = model_name.lower().strip()
+
+    for pattern, info in KNOWN_MODELS.items():
+        if pattern in model_lower or model_lower.endswith(pattern):
+            return info["dim"]
+
+    if "qwen3" in model_lower:
+        for size_key, dim in QWEN3_DIMENSIONS.items():
+            if size_key in model_lower:
+                return dim
+        return 2560
+
+    return 768
+
+
+def _resolve_max_tokens(model_name: str) -> int:
+    """Определяет макс. токенов модели из таблицы (0 = не определено)."""
+    model_lower = model_name.lower().strip()
+    for pattern, info in KNOWN_MODELS.items():
+        if pattern in model_lower or model_lower.endswith(pattern):
+            return info["max_tokens"]
+    if "qwen3" in model_lower:
+        return 32768
+    return 0
+
+
 class Config:
     """Настройки приложения"""
 
@@ -61,7 +130,9 @@ class Config:
         "EMBEDDING_MODEL",
         "your-embedding-model-name"
     )
-    EMBEDDING_DIMENSION = int(os.getenv("EMBEDDING_DIMENSION", "768"))
+    EMBEDDING_DIMENSION = _resolve_embedding_dimension(
+        EMBEDDING_MODEL, os.getenv("EMBEDDING_DIMENSION", "")
+    )
     EMBEDDING_API_BASE = os.getenv("EMBEDDING_API_BASE", "")
     EMBEDDING_API_KEY = os.getenv("EMBEDDING_API_KEY", "dummy")
     EMBEDDING_ADD_EOS_MANUAL = os.getenv("EMBEDDING_ADD_EOS_MANUAL", "false").lower() in ("true", "1", "yes")
@@ -111,9 +182,9 @@ class Config:
     MAX_SEARCH_LIMIT = int(os.getenv("MAX_SEARCH_LIMIT", "20"))
 
     VECTOR_DISTANCE_METRIC = os.getenv("VECTOR_DISTANCE_METRIC", "cosine")
-    HYBRID_SEARCH_ALPHA = float(os.getenv("HYBRID_SEARCH_ALPHA", "1.0"))
-    SEARCH_USE_MMR = os.getenv("SEARCH_USE_MMR", "false").lower() in ("true", "1", "yes")
-    MMR_LAMBDA = float(os.getenv("MMR_LAMBDA", "0.5"))
+    HYBRID_SEARCH_ALPHA = float(os.getenv("HYBRID_SEARCH_ALPHA", "0.7"))
+    SEARCH_USE_MMR = os.getenv("SEARCH_USE_MMR", "true").lower() in ("true", "1", "yes")
+    MMR_LAMBDA = float(os.getenv("MMR_LAMBDA", "0.7"))
     SEARCH_FETCH_K = int(os.getenv("SEARCH_FETCH_K", "50"))
 
     LOG_LEVEL = (os.getenv("LOG_LEVEL", "INFO") or "INFO").upper()
@@ -148,7 +219,8 @@ class Config:
         logger.info(f"Путь к векторной БД: {cls.VECTORDB_PATH}")
         logger.info(f"Путь к графовой БД: {cls.GRAPHDB_PATH}")
         logger.info(f"Модель эмбеддингов: {cls.EMBEDDING_MODEL}")
-        logger.info(f"Размерность эмбеддингов: {cls.EMBEDDING_DIMENSION}")
+        dim_source = "env" if os.getenv("EMBEDDING_DIMENSION", "").strip().isdigit() else "auto"
+        logger.info(f"Размерность эмбеддингов: {cls.EMBEDDING_DIMENSION} ({dim_source})")
         if cls.EMBEDDING_API_BASE:
             logger.info(f"API эмбеддингов: {cls.EMBEDDING_API_BASE}")
         if "qwen3" in cls.EMBEDDING_MODEL.lower():

@@ -13,9 +13,29 @@ logger = logging.getLogger(__name__)
 class BSLParser:
     """Парсер BSL модулей"""
 
-    @staticmethod
-    def parse_module(file_path: Path) -> List[Dict]:
-        """Парсинг BSL модуля на отдельные процедуры/функции"""
+    _DIRECTIVE_RE = re.compile(
+        r"&(НаКлиенте|НаСервере|НаСервереБезКонтекста|НаКлиентеНаСервереБезКонтекста"
+        r"|AtClient|AtServer|AtServerNoContext|AtClientAtServerNoContext)",
+        re.IGNORECASE,
+    )
+
+    _METHOD_RE = re.compile(
+        r"(?P<directives>(?:&[^\n]*\n)*)"
+        r"\s*(?P<type>Процедура|Функция|Procedure|Function)"
+        r"\s+(?P<name>\w+)\s*\((?P<params>[^)]*)\)"
+        r"\s*(?P<export>Экспорт|Export)?"
+        r"\s*\n(?P<body>.*?)"
+        r"\n\s*Конец(?:Процедуры|Функции)|EndProcedure|EndFunction",
+        re.IGNORECASE | re.DOTALL,
+    )
+
+    _VAR_RE = re.compile(
+        r"^\s*Перем\s+(\w+)", re.IGNORECASE | re.MULTILINE
+    )
+
+    @classmethod
+    def parse_module(cls, file_path: Path) -> List[Dict]:
+        """Парсинг BSL модуля на процедуры/функции с директивами компиляции."""
         try:
             with open(file_path, 'r', encoding='utf-8-sig') as f:
                 content = f.read()
@@ -23,20 +43,28 @@ class BSLParser:
             logger.error(f"Ошибка чтения файла {file_path}: {e}")
             return []
 
-        content_clean = re.sub(r'#Если[^\n]*\n', '', content, flags=re.IGNORECASE)
-        content_clean = re.sub(r'#ИначеЕсли[^\n]*\n', '', content_clean, flags=re.IGNORECASE)
-        content_clean = re.sub(r'#Иначе[^\n]*\n', '', content_clean, flags=re.IGNORECASE)
-        content_clean = re.sub(r'#КонецЕсли[^\n]*\n', '', content_clean, flags=re.IGNORECASE)
+        module_vars = cls._VAR_RE.findall(content)
+
+        content_clean = re.sub(
+            r'#(?:Если|ИначеЕсли|Иначе|КонецЕсли|If|ElsIf|Else|EndIf)[^\n]*\n',
+            '\n', content, flags=re.IGNORECASE,
+        )
 
         chunks = []
-        pattern = r'(?:&[^\n]*\n)*\s*(Процедура|Функция)\s+(\w+)\s*\((.*?)\)\s*(Экспорт)?\s*\n(.*?)(?=\n\s*Конец(?:Процедуры|Функции))'
+        for match in cls._METHOD_RE.finditer(content_clean):
+            directives_block = match.group("directives") or ""
+            method_type = match.group("type").capitalize()
+            if method_type in ("Procedure", "Function"):
+                method_type = "Процедура" if method_type == "Procedure" else "Функция"
+            method_name = match.group("name")
+            params = match.group("params").strip()
+            is_export = match.group("export") is not None
+            body = match.group("body")
 
-        for match in re.finditer(pattern, content_clean, re.IGNORECASE | re.DOTALL):
-            method_type = match.group(1).capitalize()
-            method_name = match.group(2)
-            params = match.group(3).strip()
-            is_export = match.group(4) is not None
-            body = match.group(5)
+            directive = ""
+            dir_match = cls._DIRECTIVE_RE.search(directives_block)
+            if dir_match:
+                directive = dir_match.group(1)
 
             start_pos = match.start()
             lines_before = content_clean[:start_pos].split('\n')
@@ -48,7 +76,8 @@ class BSLParser:
                 elif line and not line.startswith('&'):
                     break
 
-            full_code = match.group(0) + '\nКонец' + method_type + 'ы;'
+            end_keyword = "КонецПроцедуры" if "процедур" in method_type.lower() else "КонецФункции"
+            full_code = match.group(0) + '\n' + end_keyword
 
             chunks.append({
                 "method_type": method_type,
@@ -56,10 +85,11 @@ class BSLParser:
                 "params": params,
                 "signature": f"{method_type} {method_name}({params})",
                 "is_export": is_export,
+                "directive": directive,
                 "code": full_code,
                 "body": body,
                 "comments": comments,
-                "file_path": str(file_path)
+                "file_path": str(file_path),
             })
 
         if not chunks and content.strip():
@@ -69,11 +99,16 @@ class BSLParser:
                 "params": "",
                 "signature": f"Модуль {file_path.stem}",
                 "is_export": False,
+                "directive": "",
                 "code": content,
                 "body": content,
                 "comments": [],
-                "file_path": str(file_path)
+                "file_path": str(file_path),
+                "module_variables": module_vars,
             })
+
+        if module_vars and chunks and chunks[0]["method_type"] != "Module":
+            chunks[0]["module_variables"] = module_vars
 
         return chunks
 
@@ -187,9 +222,53 @@ class MetadataParser:
             for tab_elem in root.findall('.//v8:tabularSections', MetadataParser.NS):
                 tab_name = tab_elem.find('v8:name', MetadataParser.NS)
                 if tab_name is not None:
-                    tabular_sections.append(tab_name.text)
+                    ts_attrs = []
+                    for ts_attr in tab_elem.findall('.//v8:attributes', MetadataParser.NS):
+                        ts_attr_name = ts_attr.find('v8:name', MetadataParser.NS)
+                        ts_attr_type = ts_attr.find('.//v8:type', MetadataParser.NS)
+                        if ts_attr_name is not None:
+                            ts_attrs.append({
+                                "name": ts_attr_name.text,
+                                "type": MetadataParser._extract_type(ts_attr_type) if ts_attr_type is not None else "Неопределено"
+                            })
+                    tabular_sections.append({
+                        "name": tab_name.text,
+                        "attributes": ts_attrs,
+                    })
 
             metadata["tabular_sections"] = tabular_sections
+
+            dimensions = []
+            for dim_elem in root.findall('.//v8:dimensions', MetadataParser.NS):
+                dim_name = dim_elem.find('v8:name', MetadataParser.NS)
+                dim_type = dim_elem.find('.//v8:type', MetadataParser.NS)
+                if dim_name is not None:
+                    dimensions.append({
+                        "name": dim_name.text,
+                        "type": MetadataParser._extract_type(dim_type) if dim_type is not None else "Неопределено"
+                    })
+            if dimensions:
+                metadata["dimensions"] = dimensions
+
+            resources = []
+            for res_elem in root.findall('.//v8:resources', MetadataParser.NS):
+                res_name = res_elem.find('v8:name', MetadataParser.NS)
+                res_type = res_elem.find('.//v8:type', MetadataParser.NS)
+                if res_name is not None:
+                    resources.append({
+                        "name": res_name.text,
+                        "type": MetadataParser._extract_type(res_type) if res_type is not None else "Неопределено"
+                    })
+            if resources:
+                metadata["resources"] = resources
+
+            commands = []
+            for cmd_elem in root.findall('.//v8:commands', MetadataParser.NS):
+                cmd_name = cmd_elem.find('v8:name', MetadataParser.NS)
+                if cmd_name is not None:
+                    commands.append(cmd_name.text)
+            if commands:
+                metadata["commands"] = commands
 
             parent_dir = xml_path.parent
             has_modules = []

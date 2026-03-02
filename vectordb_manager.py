@@ -85,7 +85,21 @@ class VectorDBManager:
         self.collections = {}
         self._init_collections()
 
-        logger.info(f"Векторная БД инициализирована: {self.db_path}")
+        alpha = getattr(Config, "HYBRID_SEARCH_ALPHA", 1.0)
+        use_mmr = getattr(Config, "SEARCH_USE_MMR", False)
+        if alpha < 1.0 and not HAS_BM25:
+            logger.warning(
+                "Гибридный поиск включён (HYBRID_SEARCH_ALPHA < 1.0), "
+                "но rank_bm25 не установлен. pip install rank_bm25"
+            )
+        search_mode = []
+        if alpha < 1.0 and HAS_BM25:
+            search_mode.append(f"гибрид (alpha={alpha})")
+        else:
+            search_mode.append("вектор")
+        if use_mmr:
+            search_mode.append(f"MMR (lambda={getattr(Config, 'MMR_LAMBDA', 0.5)})")
+        logger.info(f"Векторная БД инициализирована: {self.db_path}, поиск: {' + '.join(search_mode)}")
 
     def _init_collections(self):
         distance = getattr(Config, "VECTOR_DISTANCE_METRIC", "cosine")
@@ -137,6 +151,7 @@ class VectorDBManager:
                     "method_name": chunk.get("method_name", ""),
                     "method_type": chunk.get("method_type", ""),
                     "is_export": chunk.get("is_export", False),
+                    "directive": chunk.get("directive", ""),
                     "signature": chunk.get("signature", ""),
                     "file_path": chunk.get("file_path", ""),
                     "chunk_index": chunk.get("chunk_index", 0),
@@ -152,6 +167,39 @@ class VectorDBManager:
             except Exception as e:
                 logger.error(f"Ошибка добавления кода в БД: {e}")
 
+    @staticmethod
+    def _build_metadata_document(obj: Dict) -> str:
+        """Формирует текстовый документ для эмбеддинга из объекта метаданных."""
+        text_parts = [
+            f"Тип: {obj.get('type', '')}",
+            f"Имя: {obj.get('name', '')}",
+            f"Синоним: {obj.get('synonym', '')}",
+            f"Комментарий: {obj.get('comment', '')}"
+        ]
+        if obj.get('attributes'):
+            attr_list = [f"{a['name']} ({a['type']})" for a in obj['attributes']]
+            text_parts.append(f"Реквизиты: {', '.join(attr_list)}")
+        if obj.get('dimensions'):
+            dim_list = [f"{d['name']} ({d['type']})" for d in obj['dimensions']]
+            text_parts.append(f"Измерения: {', '.join(dim_list)}")
+        if obj.get('resources'):
+            res_list = [f"{r['name']} ({r['type']})" for r in obj['resources']]
+            text_parts.append(f"Ресурсы: {', '.join(res_list)}")
+        if obj.get('tabular_sections'):
+            ts_parts = []
+            for ts in obj['tabular_sections']:
+                if isinstance(ts, dict):
+                    ts_name = ts['name']
+                    ts_attrs = [f"{a['name']} ({a['type']})" for a in ts.get('attributes', [])]
+                    ts_desc = f"{ts_name}({', '.join(ts_attrs)})" if ts_attrs else ts_name
+                    ts_parts.append(ts_desc)
+                else:
+                    ts_parts.append(str(ts))
+            text_parts.append(f"Табличные части: {'; '.join(ts_parts)}")
+        if obj.get('commands'):
+            text_parts.append(f"Команды: {', '.join(obj['commands'])}")
+        return "\n".join(text_parts)
+
     def add_metadata_objects(self, metadata_objects: List[Dict], batch_size: int = 50):
         collection = self.collections["metadata"]
         for i in range(0, len(metadata_objects), batch_size):
@@ -160,22 +208,14 @@ class VectorDBManager:
             metadatas = []
             ids = []
             for j, obj in enumerate(batch):
-                text_parts = [
-                    f"Тип: {obj.get('type', '')}",
-                    f"Имя: {obj.get('name', '')}",
-                    f"Синоним: {obj.get('synonym', '')}",
-                    f"Комментарий: {obj.get('comment', '')}"
-                ]
-                if obj.get('attributes'):
-                    attr_list = [f"{attr['name']} ({attr['type']})" for attr in obj['attributes']]
-                    text_parts.append(f"Реквизиты: {', '.join(attr_list)}")
-                if obj.get('tabular_sections'):
-                    text_parts.append(f"Табличные части: {', '.join(obj['tabular_sections'])}")
-                document = "\n".join(text_parts)
+                document = self._build_metadata_document(obj)
                 if Config.EMBEDDING_MAX_CHARS > 0 and len(document) > Config.EMBEDDING_MAX_CHARS:
                     document = document[: Config.EMBEDDING_MAX_CHARS - 3] + "..."
                 documents.append(document)
                 obj_type = obj.get('object_type_dir') or obj.get('type', '')
+                ts_names = []
+                for ts in obj.get('tabular_sections', []):
+                    ts_names.append(ts['name'] if isinstance(ts, dict) else str(ts))
                 metadata = {
                     "object_name": obj.get('name', ''),
                     "object_type": obj_type,
@@ -183,6 +223,10 @@ class VectorDBManager:
                     "description": obj.get('comment', ''),
                     "has_modules": ','.join(obj.get('has_modules', [])),
                     "attributes_count": obj.get('attributes_count', 0),
+                    "tabular_sections": ','.join(ts_names),
+                    "has_dimensions": len(obj.get('dimensions', [])) > 0,
+                    "has_resources": len(obj.get('resources', [])) > 0,
+                    "commands_count": len(obj.get('commands', [])),
                     "file_path": obj.get('file_path', '')
                 }
                 metadatas.append(metadata)

@@ -186,7 +186,7 @@ async def handle_call_tool(
             formatted_results = []
             for result in results:
                 metadata = result["metadata"]
-                formatted_results.append({
+                item = {
                     "rank": result["rank"],
                     "relevance": result["relevance"],
                     "object": f"{metadata.get('object_type', '')}.{metadata.get('object_name', '')}",
@@ -195,8 +195,12 @@ async def handle_call_tool(
                     "signature": metadata.get("signature", ""),
                     "is_export": metadata.get("is_export", False),
                     "code": result["document"],
-                    "file_path": metadata.get("file_path", "")
-                })
+                    "file_path": metadata.get("file_path", ""),
+                }
+                directive = metadata.get("directive", "")
+                if directive:
+                    item["directive"] = directive
+                formatted_results.append(item)
             response = {"query": query, "total_results": len(formatted_results), "results": formatted_results}
             return [types.TextContent(type="text", text=json.dumps(response, ensure_ascii=False, indent=2))]
 
@@ -214,7 +218,7 @@ async def handle_call_tool(
             formatted_results = []
             for result in results:
                 metadata = result["metadata"]
-                formatted_results.append({
+                item = {
                     "rank": result["rank"],
                     "relevance": result["relevance"],
                     "type": metadata.get("object_type", ""),
@@ -223,8 +227,18 @@ async def handle_call_tool(
                     "description": metadata.get("description", ""),
                     "has_modules": [x for x in (metadata.get("has_modules") or "").split(",") if x.strip()],
                     "attributes_count": metadata.get("attributes_count", 0),
-                    "file_path": metadata.get("file_path", "")
-                })
+                    "file_path": metadata.get("file_path", ""),
+                }
+                ts_raw = metadata.get("tabular_sections", "")
+                if ts_raw:
+                    item["tabular_sections"] = [x.strip() for x in ts_raw.split(",") if x.strip()]
+                if metadata.get("has_dimensions"):
+                    item["has_dimensions"] = True
+                if metadata.get("has_resources"):
+                    item["has_resources"] = True
+                if metadata.get("commands_count", 0) > 0:
+                    item["commands_count"] = metadata["commands_count"]
+                formatted_results.append(item)
             response = {"query": query, "object_type_filter": object_type, "total_results": len(formatted_results), "results": formatted_results}
             return [types.TextContent(type="text", text=json.dumps(response, ensure_ascii=False, indent=2))]
 
@@ -266,6 +280,7 @@ async def handle_call_tool(
                         "line_number": r["line_number"],
                         "line_content": r["line_content"],
                         "file_path": r["file_path"],
+                        "source": "grep",
                     }
                     for r in grep_results
                 ]
@@ -281,10 +296,34 @@ async def handle_call_tool(
                             "in_method": metadata.get("method_name", ""),
                             "code_context": result["document"][:500] + "..." if len(result["document"]) > 500 else result["document"],
                             "file_path": metadata.get("file_path", ""),
+                            "source": "vector",
                         })
                         if len(usages) >= limit:
                             break
-            response = {"method_name": method_name, "total_usages": len(usages), "usages": usages}
+
+            graph_deps = graph_manager.get_dependencies(method_name, limit=20)
+            caller_objects = set()
+            for u in usages:
+                caller_objects.add(u["object"])
+            graph_extra = [
+                {
+                    "object": dep["object"],
+                    "edge_type": dep["edge_type"],
+                    "node_id": dep["node_id"],
+                    "source": "graph",
+                }
+                for dep in graph_deps
+                if dep["object"] not in caller_objects
+            ]
+
+            response = {
+                "method_name": method_name,
+                "total_usages": len(usages),
+                "usages": usages,
+            }
+            if graph_extra:
+                response["graph_related"] = graph_extra
+                response["graph_related_count"] = len(graph_extra)
             return [types.TextContent(type="text", text=json.dumps(response, ensure_ascii=False, indent=2))]
 
         elif name == "get_vectordb_stats":
@@ -314,23 +353,35 @@ async def handle_call_tool(
                 "synonym": metadata_info.get("synonym", ""),
                 "description": metadata_info.get("description", ""),
                 "has_modules": [x for x in (metadata_info.get("has_modules") or "").split(",") if x.strip()],
-                "attributes_count": metadata_info.get("attributes_count", 0)
+                "attributes_count": metadata_info.get("attributes_count", 0),
             }
+            ts_raw = metadata_info.get("tabular_sections", "")
+            if ts_raw:
+                response["tabular_sections"] = [x.strip() for x in ts_raw.split(",") if x.strip()]
+            if metadata_info.get("has_dimensions"):
+                response["has_dimensions"] = True
+            if metadata_info.get("has_resources"):
+                response["has_resources"] = True
+            if metadata_info.get("commands_count", 0) > 0:
+                response["commands_count"] = metadata_info["commands_count"]
             if include_code:
                 code_results = db_manager.search_code_by_object(object_name=object_name, limit=200)
                 if not code_results:
                     code_results = db_manager.search_code(object_name, limit=100)
                     code_results = [r for r in code_results if r["metadata"].get("object_name") == object_name]
-                object_code = [
-                    {
+                object_code = []
+                for result in code_results:
+                    code_item = {
                         "module": result["metadata"].get("module_name", ""),
                         "method": result["metadata"].get("method_name", ""),
                         "signature": result["metadata"].get("signature", ""),
                         "is_export": result["metadata"].get("is_export", False),
-                        "code": result["document"]
+                        "code": result["document"],
                     }
-                    for result in code_results
-                ]
+                    directive = result["metadata"].get("directive", "")
+                    if directive:
+                        code_item["directive"] = directive
+                    object_code.append(code_item)
                 response["code"] = object_code
                 response["methods_count"] = len(object_code)
             return [types.TextContent(type="text", text=json.dumps(response, ensure_ascii=False, indent=2))]
