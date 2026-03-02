@@ -145,19 +145,30 @@ class GraphDBManager:
         )
         return node_id
 
-    def get_dependencies(self, object_name: str, max_depth: int = 2) -> List[Dict]:
+    def _escape_like(self, value: str) -> str:
+        """Экранирует % и _ для безопасного использования в LIKE."""
+        return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+    def get_dependencies(
+        self,
+        object_name: str,
+        max_depth: int = 2,
+        limit: int = 100
+    ) -> List[Dict]:
         """Что зависит от объекта X (кто на него ссылается)."""
+        limit = min(max(1, limit), 500)
+        escaped = self._escape_like(object_name)
         conn = self._get_conn()
         cur = conn.execute(
             """
             SELECT DISTINCT n.id, n.name, n.object_type, n.object_name, e.edge_type
             FROM edges e
             JOIN nodes n ON n.id = e.source_id
-            WHERE e.target_id LIKE ? OR e.target_id = ?
+            WHERE e.target_id LIKE ? ESCAPE '\\' OR e.target_id LIKE ? ESCAPE '\\'
             ORDER BY e.edge_type, n.name
-            LIMIT 100
+            LIMIT ?
             """,
-            (f"%:{object_name}", f"metadata:%:{object_name}"),
+            (f"%:{escaped}", f"metadata:%:{escaped}", limit),
         )
         return [
             {
@@ -168,19 +179,21 @@ class GraphDBManager:
             for r in cur.fetchall()
         ]
 
-    def get_references(self, object_name: str) -> List[Dict]:
+    def get_references(self, object_name: str, limit: int = 100) -> List[Dict]:
         """На что ссылается объект X (какие объекты он использует)."""
+        limit = min(max(1, limit), 500)
+        escaped = self._escape_like(object_name)
         conn = self._get_conn()
         cur = conn.execute(
             """
             SELECT DISTINCT n.id, n.name, n.object_type, n.object_name, e.edge_type
             FROM edges e
             JOIN nodes n ON n.id = e.target_id
-            WHERE e.source_id LIKE ? OR e.source_id = ?
+            WHERE e.source_id LIKE ? ESCAPE '\\' OR e.source_id LIKE ? ESCAPE '\\'
             ORDER BY e.edge_type, n.name
-            LIMIT 100
+            LIMIT ?
             """,
-            (f"%:{object_name}:%", f"metadata:%:{object_name}"),
+            (f"%:{escaped}", f"metadata:%:{escaped}", limit),
         )
         return [
             {

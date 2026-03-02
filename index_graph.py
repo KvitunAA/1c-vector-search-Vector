@@ -1,7 +1,14 @@
 """
-Скрипт индексации графа связей конфигурации 1С.
-Поддерживает кеширование сканирования и чекпоинты для продолжения с места остановки.
+[DEPRECATED] Однопроцессорная версия индексатора графа.
+Используйте index_graph_mp.py вместо этого файла.
+
+index_graph_mp.py поддерживает тот же функционал + многопроцессорность:
+  python index_graph_mp.py --workers 1   # эквивалент этого скрипта
+  python index_graph_mp.py --workers 8   # ускоренная параллельная индексация
+
+Этот файл оставлен для обратной совместимости и будет удалён в будущем.
 """
+import warnings
 import sys
 import json
 from pathlib import Path
@@ -76,6 +83,10 @@ class GraphIndexer:
             try:
                 with open(cache_path, 'r', encoding='utf-8') as f:
                     data = json.load(f)
+                cached_config = data.get("config_path", "")
+                if str(self.config_path.resolve()) != str(Path(cached_config).resolve()):
+                    logger.warning(f"Кеш создан для другого пути конфигурации ({cached_config}), пересканирование")
+                    return None
                 return data['metadata'], data['modules'], data['forms']
             except Exception as e:
                 logger.warning(f"Ошибка чтения кеша, будет выполнено сканирование: {e}")
@@ -98,6 +109,7 @@ class GraphIndexer:
                 })
 
             data = {
+                "config_path": str(self.config_path.resolve()),
                 "metadata": metadata_list,
                 "modules": serializable_modules,
                 "forms": forms_list
@@ -316,4 +328,10 @@ def main():
 
 
 if __name__ == "__main__":
+    warnings.warn(
+        "index_graph.py устарел. Используйте index_graph_mp.py --workers 1 "
+        "для однопроцессорного режима.",
+        DeprecationWarning,
+        stacklevel=1,
+    )
     main()

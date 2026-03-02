@@ -41,7 +41,7 @@ def _process_module(args: Tuple[Path, str, List[Dict], FrozenSet[Tuple[str, str]
     obj_type = parts[0] if len(parts) > 0 else "Unknown"
     obj_name = parts[1] if len(parts) > 1 else file_path.stem
     
-    source_id = f"{obj_type}:{obj_name}"
+    source_id = f"metadata:{obj_type}:{obj_name}"
     
     method_nodes = []
     edges = []
@@ -69,7 +69,7 @@ def _process_module(args: Tuple[Path, str, List[Dict], FrozenSet[Tuple[str, str]
                 "AccumulationRegisters", "CommonModules", "Enums",
                 "DataProcessors", "Reports",
             ):
-                target_id = f"{ref_type}:{ref_name}"
+                target_id = f"metadata:{ref_type}:{ref_name}"
                 edges.append({"source": source_id, "target": target_id, "edge_type": "USES_IN_CODE"})
     
     return {
@@ -129,6 +129,10 @@ class GraphIndexer:
             try:
                 with open(cache_path, 'r', encoding='utf-8') as f:
                     data = json.load(f)
+                cached_config = data.get("config_path", "")
+                if str(self.config_path.resolve()) != str(Path(cached_config).resolve()):
+                    logger.warning(f"Кеш создан для другого пути конфигурации ({cached_config}), пересканирование")
+                    return None
                 return data['metadata'], data['modules'], data['forms']
             except Exception as e:
                 logger.warning(f"Ошибка чтения кеша, будет выполнено сканирование: {e}")
@@ -147,7 +151,12 @@ class GraphIndexer:
                     "object_full_name": object_full_name,
                     "methods": methods
                 })
-            data = {"metadata": metadata_list, "modules": serializable_modules, "forms": forms_list}
+            data = {
+                "config_path": str(self.config_path.resolve()),
+                "metadata": metadata_list,
+                "modules": serializable_modules,
+                "forms": forms_list
+            }
             with open(SCAN_CACHE_FILE, 'w', encoding='utf-8') as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
         except Exception as e:
@@ -220,6 +229,10 @@ class GraphIndexer:
                 for method_node in result["method_nodes"]:
                     self.graph.add_node(node_id=method_node["node_id"], node_type=method_node["node_type"], name=method_node["name"], object_type=method_node["object_type"], object_name=method_node["object_name"], extra=method_node["extra"])
                 for edge in result["edges"]:
+                    target_id = edge["target"]
+                    if target_id.startswith("metadata:") and target_id.count(":") >= 2:
+                        _, t_type, t_name = target_id.split(":", 2)
+                        self.graph.ensure_metadata_node(object_type=t_type, object_name=t_name, synonym="")
                     self.graph.add_edge(edge["source"], edge["target"], edge["edge_type"])
                 self._save_checkpoint('modules', real_index + 1)
             self._save_checkpoint('modules', len(modules_data))

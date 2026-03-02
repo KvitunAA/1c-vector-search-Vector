@@ -138,7 +138,7 @@ set GRAPHDB_PATH=%SCRIPT_DIR%projects\\{name}\\graphdb\\graph.db
 set "PYTHON=python"
 if defined VECTOR_PYTHON_PATH set "PYTHON=%VECTOR_PYTHON_PATH%"
 
-"%PYTHON%" "%SCRIPT_DIR%index_graph.py" --clear
+"%PYTHON%" "%SCRIPT_DIR%index_graph_mp.py" --clear
 '''
     run_index_graph_cmd.write_text(run_index_graph_content, encoding="utf-8")
     logger.success(f"Создан: {run_index_graph_cmd}")

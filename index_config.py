@@ -93,6 +93,8 @@ class ConfigIndexer:
         logger.info(f"Найдено {len(modules_data)} файлов с кодом")
 
         all_chunks = []
+        max_chars = Config.CHUNK_MAX_CHARS if Config.CHUNK_MAX_CHARS > 0 else 2048
+        overlap_chars = Config.CHUNK_OVERLAP_CHARS
 
         for file_path, object_full_name, methods in tqdm(modules_data, desc="Обработка модулей"):
             parts = object_full_name.split('.')
@@ -101,7 +103,7 @@ class ConfigIndexer:
             module_name = file_path.stem
 
             for method in methods:
-                chunk = {
+                base_chunk = {
                     "object_name": object_name,
                     "object_type": object_type,
                     "module_name": module_name,
@@ -113,12 +115,71 @@ class ConfigIndexer:
                     "comments": method.get("comments", []),
                     "file_path": str(file_path)
                 }
-                all_chunks.append(chunk)
+                sub_chunks = self._split_method_if_needed(base_chunk, max_chars, overlap_chars)
+                all_chunks.extend(sub_chunks)
 
         logger.info(f"Добавление {len(all_chunks)} чанков кода в векторную БД...")
         self.db_manager.add_code_chunks(all_chunks)
 
         return len(all_chunks)
+
+    def _split_method_if_needed(
+        self,
+        chunk: Dict,
+        max_chars: int,
+        overlap_chars: int
+    ) -> List[Dict]:
+        """Разбивает длинный метод на чанки с нахлёстом."""
+        code = chunk["code"]
+        if len(code) <= max_chars:
+            chunk["chunk_index"] = 0
+            chunk["total_chunks"] = 1
+            return [chunk]
+
+        lines = code.split("\n")
+        if len(lines) <= 1:
+            chunk["chunk_index"] = 0
+            chunk["total_chunks"] = 1
+            return [chunk]
+
+        header = lines[0]
+        footer = lines[-1]
+        body_lines = lines[1:-1]
+        body_text = "\n".join(body_lines)
+        if len(body_text) <= max_chars:
+            chunk["chunk_index"] = 0
+            chunk["total_chunks"] = 1
+            return [chunk]
+
+        overlap_lines = max(1, overlap_chars // 40)
+        chunk_bodies = []
+        current = []
+        current_len = 0
+
+        for line in body_lines:
+            line_len = len(line) + 1
+            if current_len + line_len > max_chars and current:
+                chunk_bodies.append("\n".join(current))
+                overlap = current[-overlap_lines:] if len(current) >= overlap_lines else current
+                current = overlap
+                current_len = sum(len(ln) + 1 for ln in overlap)
+            current.append(line)
+            current_len += line_len
+
+        if current:
+            chunk_bodies.append("\n".join(current))
+
+        result = []
+        for i, body_part in enumerate(chunk_bodies):
+            full_code = header + "\n" + body_part + "\n" + footer
+            sub = {
+                **chunk,
+                "code": full_code,
+                "chunk_index": i,
+                "total_chunks": len(chunk_bodies),
+            }
+            result.append(sub)
+        return result
 
     def _index_metadata(self) -> int:
         """Индексация метаданных"""

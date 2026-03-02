@@ -18,3 +18,9 @@ python-dotenv>=1.0.0
 pydantic>=2.5.0
 loguru>=0.7.0
 tqdm>=4.66.0
+
+# Гибридный поиск (BM25 для re-ranking)
+rank_bm25>=0.2.2
+
+# Тестирование
+pytest>=8.0.0

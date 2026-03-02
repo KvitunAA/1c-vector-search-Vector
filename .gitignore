@@ -30,6 +30,13 @@ local.env
 *.log
 logs/
 
+# Индексация: кеш и чекпоинты
+graph_scan_cache.json
+graph_checkpoint.json
+
+# БД: vectordb коммитится по желанию, graphdb содержит SQLite
+projects/*/graphdb/
+
 # Временные файлы
 tmp/
 temp/

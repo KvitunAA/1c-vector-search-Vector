@@ -110,7 +110,13 @@ class Config:
     DEFAULT_SEARCH_LIMIT = int(os.getenv("DEFAULT_SEARCH_LIMIT", "5"))
     MAX_SEARCH_LIMIT = int(os.getenv("MAX_SEARCH_LIMIT", "20"))
 
-    LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+    VECTOR_DISTANCE_METRIC = os.getenv("VECTOR_DISTANCE_METRIC", "cosine")
+    HYBRID_SEARCH_ALPHA = float(os.getenv("HYBRID_SEARCH_ALPHA", "1.0"))
+    SEARCH_USE_MMR = os.getenv("SEARCH_USE_MMR", "false").lower() in ("true", "1", "yes")
+    MMR_LAMBDA = float(os.getenv("MMR_LAMBDA", "0.5"))
+    SEARCH_FETCH_K = int(os.getenv("SEARCH_FETCH_K", "50"))
+
+    LOG_LEVEL = (os.getenv("LOG_LEVEL", "INFO") or "INFO").upper()
 
     @classmethod
     def validate(cls):
@@ -145,7 +151,7 @@ class Config:
         logger.info(f"Размерность эмбеддингов: {cls.EMBEDDING_DIMENSION}")
         if cls.EMBEDDING_API_BASE:
             logger.info(f"API эмбеддингов: {cls.EMBEDDING_API_BASE}")
-        if "Qwen3" in cls.EMBEDDING_MODEL:
+        if "qwen3" in cls.EMBEDDING_MODEL.lower():
             logger.info(f"EMBEDDING_ADD_EOS_MANUAL: {cls.EMBEDDING_ADD_EOS_MANUAL}")
         if cls.EMBEDDING_MAX_TOKENS:
             logger.info(f"EMBEDDING_MAX_TOKENS: {cls.EMBEDDING_MAX_TOKENS} → EMBEDDING_MAX_CHARS: {cls.EMBEDDING_MAX_CHARS}")
@@ -157,6 +163,8 @@ class Config:
         logger.info(f"Чанки: {chunk_info}, нахлёст {cls.CHUNK_OVERLAP_TOKENS} токенов (~{cls.CHUNK_OVERLAP_CHARS} символов)")
         logger.info(f"Лимит поиска по умолчанию: {cls.DEFAULT_SEARCH_LIMIT}")
         logger.info(f"Максимальный лимит поиска: {cls.MAX_SEARCH_LIMIT}")
+        logger.info(f"Метрика расстояния: {cls.VECTOR_DISTANCE_METRIC}")
+        logger.info(f"Гибридный поиск alpha: {cls.HYBRID_SEARCH_ALPHA}, MMR: {cls.SEARCH_USE_MMR}")
         logger.info(f"Уровень логирования: {cls.LOG_LEVEL}")
         logger.info("=" * 60)
 

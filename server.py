@@ -5,6 +5,7 @@ import asyncio
 import json
 import logging
 import sys
+from pathlib import Path
 from typing import Optional
 
 from mcp.server import Server, NotificationOptions
@@ -15,6 +16,7 @@ import mcp.types as types
 from config import Config
 from vectordb_manager import VectorDBManager
 from graph_db import GraphDBManager
+from code_grep import grep_method_usage
 
 logging.basicConfig(
     level=getattr(logging, Config.LOG_LEVEL),
@@ -127,7 +129,8 @@ async def handle_list_tools() -> list[types.Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "object_name": {"type": "string", "description": "Имя объекта метаданных (например: 'Номенклатура', 'Сотрудники')"}
+                    "object_name": {"type": "string", "description": "Имя объекта метаданных (например: 'Номенклатура', 'Сотрудники')"},
+                    "limit": {"type": "integer", "description": "Максимум результатов", "default": 100}
                 },
                 "required": ["object_name"]
             }
@@ -141,7 +144,8 @@ async def handle_list_tools() -> list[types.Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "object_name": {"type": "string", "description": "Имя объекта метаданных"}
+                    "object_name": {"type": "string", "description": "Имя объекта метаданных"},
+                    "limit": {"type": "integer", "description": "Максимум результатов", "default": 100}
                 },
                 "required": ["object_name"]
             }
@@ -167,10 +171,13 @@ async def handle_call_tool(
     name: str, arguments: dict | None
 ) -> list[types.TextContent | types.ImageContent | types.EmbeddedResource]:
     """Обработка вызовов инструментов"""
+    arguments = arguments or {}
 
     try:
         if name == "search_1c_code":
-            query = arguments.get("query")
+            query = (arguments.get("query") or "").strip()
+            if not query:
+                return [types.TextContent(type="text", text=json.dumps({"error": "query обязателен и не может быть пустым"}, ensure_ascii=False))]
             limit = arguments.get("limit", 5)
             only_export = arguments.get("only_export", False)
             logger.info(f"Поиск кода: '{query}' (limit={limit}, only_export={only_export})")
@@ -194,7 +201,9 @@ async def handle_call_tool(
             return [types.TextContent(type="text", text=json.dumps(response, ensure_ascii=False, indent=2))]
 
         elif name == "search_1c_metadata":
-            query = arguments.get("query")
+            query = (arguments.get("query") or "").strip()
+            if not query:
+                return [types.TextContent(type="text", text=json.dumps({"error": "query обязателен и не может быть пустым"}, ensure_ascii=False))]
             object_type = arguments.get("object_type", "Все")
             limit = arguments.get("limit", 5)
             logger.info(f"Поиск метаданных: '{query}' (type={object_type}, limit={limit})")
@@ -212,7 +221,7 @@ async def handle_call_tool(
                     "name": metadata.get("object_name", ""),
                     "synonym": metadata.get("synonym", ""),
                     "description": metadata.get("description", ""),
-                    "has_modules": metadata.get("has_modules", "").split(",") if metadata.get("has_modules") else [],
+                    "has_modules": [x for x in (metadata.get("has_modules") or "").split(",") if x.strip()],
                     "attributes_count": metadata.get("attributes_count", 0),
                     "file_path": metadata.get("file_path", "")
                 })
@@ -220,7 +229,9 @@ async def handle_call_tool(
             return [types.TextContent(type="text", text=json.dumps(response, ensure_ascii=False, indent=2))]
 
         elif name == "search_1c_forms":
-            query = arguments.get("query")
+            query = (arguments.get("query") or "").strip()
+            if not query:
+                return [types.TextContent(type="text", text=json.dumps({"error": "query обязателен и не может быть пустым"}, ensure_ascii=False))]
             limit = arguments.get("limit", 5)
             logger.info(f"Поиск форм: '{query}' (limit={limit})")
             results = db_manager.search_forms(query, limit=limit)
@@ -239,25 +250,41 @@ async def handle_call_tool(
             return [types.TextContent(type="text", text=json.dumps(response, ensure_ascii=False, indent=2))]
 
         elif name == "find_1c_method_usage":
-            method_name = arguments.get("method_name")
+            method_name = (arguments.get("method_name") or "").strip()
+            if not method_name:
+                return [types.TextContent(type="text", text=json.dumps({"error": "method_name обязателен и не может быть пустым"}, ensure_ascii=False))]
             limit = arguments.get("limit", 10)
             logger.info(f"Поиск использования метода: '{method_name}' (limit={limit})")
-            results = db_manager.search_code(f"вызов {method_name}", limit=limit * 2)
-            filtered_results = []
-            for result in results:
-                if method_name.lower() in result["document"].lower():
-                    metadata = result["metadata"]
-                    filtered_results.append({
-                        "relevance": result["relevance"],
-                        "object": f"{metadata.get('object_type', '')}.{metadata.get('object_name', '')}",
-                        "module": metadata.get("module_name", ""),
-                        "in_method": metadata.get("method_name", ""),
-                        "code_context": result["document"][:500] + "..." if len(result["document"]) > 500 else result["document"],
-                        "file_path": metadata.get("file_path", "")
-                    })
-                    if len(filtered_results) >= limit:
-                        break
-            response = {"method_name": method_name, "total_usages": len(filtered_results), "usages": filtered_results}
+            config_path = Path(Config.CONFIG_PATH) if Config.CONFIG_PATH else None
+            if config_path and config_path.exists():
+                grep_results = grep_method_usage(method_name, config_path=config_path, limit=limit)
+                usages = [
+                    {
+                        "object": f"{r['object_type']}.{r['object_name']}",
+                        "module": r["module_name"],
+                        "in_method": r["in_method"],
+                        "line_number": r["line_number"],
+                        "line_content": r["line_content"],
+                        "file_path": r["file_path"],
+                    }
+                    for r in grep_results
+                ]
+            else:
+                results = db_manager.search_code(f"вызов {method_name}", limit=limit * 2)
+                usages = []
+                for result in results:
+                    if method_name.lower() in result["document"].lower():
+                        metadata = result["metadata"]
+                        usages.append({
+                            "object": f"{metadata.get('object_type', '')}.{metadata.get('object_name', '')}",
+                            "module": metadata.get("module_name", ""),
+                            "in_method": metadata.get("method_name", ""),
+                            "code_context": result["document"][:500] + "..." if len(result["document"]) > 500 else result["document"],
+                            "file_path": metadata.get("file_path", ""),
+                        })
+                        if len(usages) >= limit:
+                            break
+            response = {"method_name": method_name, "total_usages": len(usages), "usages": usages}
             return [types.TextContent(type="text", text=json.dumps(response, ensure_ascii=False, indent=2))]
 
         elif name == "get_vectordb_stats":
@@ -272,8 +299,10 @@ async def handle_call_tool(
             return [types.TextContent(type="text", text=json.dumps(response, ensure_ascii=False, indent=2))]
 
         elif name == "search_by_object_name":
-            object_name = arguments.get("object_name")
+            object_name = (arguments.get("object_name") or "").strip()
             include_code = arguments.get("include_code", True)
+            if not object_name:
+                return [types.TextContent(type="text", text=json.dumps({"error": "object_name обязателен и не может быть пустым"}, ensure_ascii=False))]
             logger.info(f"Поиск объекта по имени: '{object_name}'")
             metadata_results = db_manager.search_metadata(object_name, limit=1)
             if not metadata_results:
@@ -284,7 +313,7 @@ async def handle_call_tool(
                 "type": metadata_info.get("object_type", ""),
                 "synonym": metadata_info.get("synonym", ""),
                 "description": metadata_info.get("description", ""),
-                "has_modules": metadata_info.get("has_modules", "").split(",") if metadata_info.get("has_modules") else [],
+                "has_modules": [x for x in (metadata_info.get("has_modules") or "").split(",") if x.strip()],
                 "attributes_count": metadata_info.get("attributes_count", 0)
             }
             if include_code:
@@ -307,16 +336,28 @@ async def handle_call_tool(
             return [types.TextContent(type="text", text=json.dumps(response, ensure_ascii=False, indent=2))]
 
         elif name == "graph_dependencies":
-            object_name = arguments.get("object_name")
-            logger.info(f"Граф: зависимости объекта '{object_name}'")
-            deps = graph_manager.get_dependencies(object_name)
+            object_name = (arguments.get("object_name") or "").strip()
+            try:
+                limit = min(max(1, int(arguments.get("limit", 100))), 500)
+            except (TypeError, ValueError):
+                limit = 100
+            if not object_name:
+                return [types.TextContent(type="text", text=json.dumps({"error": "object_name обязателен и не может быть пустым"}, ensure_ascii=False))]
+            logger.info(f"Граф: зависимости объекта '{object_name}' (limit={limit})")
+            deps = graph_manager.get_dependencies(object_name, limit=limit)
             response = {"object_name": object_name, "description": "Объекты, которые ссылаются на указанный объект", "total_count": len(deps), "dependencies": deps}
             return [types.TextContent(type="text", text=json.dumps(response, ensure_ascii=False, indent=2))]
 
         elif name == "graph_references":
-            object_name = arguments.get("object_name")
-            logger.info(f"Граф: ссылки объекта '{object_name}'")
-            refs = graph_manager.get_references(object_name)
+            object_name = (arguments.get("object_name") or "").strip()
+            try:
+                limit = min(max(1, int(arguments.get("limit", 100))), 500)
+            except (TypeError, ValueError):
+                limit = 100
+            if not object_name:
+                return [types.TextContent(type="text", text=json.dumps({"error": "object_name обязателен и не может быть пустым"}, ensure_ascii=False))]
+            logger.info(f"Граф: ссылки объекта '{object_name}' (limit={limit})")
+            refs = graph_manager.get_references(object_name, limit=limit)
             response = {"object_name": object_name, "description": "Объекты, на которые ссылается указанный объект", "total_count": len(refs), "references": refs}
             return [types.TextContent(type="text", text=json.dumps(response, ensure_ascii=False, indent=2))]
 
@@ -328,7 +369,6 @@ async def handle_call_tool(
 
         elif name == "get_analyst_instructions":
             logger.info("Инструкция для аналитика")
-            from pathlib import Path
             instructions_path = Path(Config.PROFILE_DIR) / "ИнструкцияПоИспользованиюMCP.md"
             if instructions_path.exists():
                 text = instructions_path.read_text(encoding="utf-8")
@@ -364,19 +404,23 @@ async def main():
     else:
         logger.info(f"✅ Граф готов: {graph_stats['nodes_count']} узлов, {graph_stats['edges_count']} рёбер")
 
-    async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
-        await app.run(
-            read_stream,
-            write_stream,
-            InitializationOptions(
-                server_name="1c-vector-search",
-                server_version="0.1.0",
-                capabilities=app.get_capabilities(
-                    notification_options=NotificationOptions(),
-                    experimental_capabilities={},
+    try:
+        async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
+            await app.run(
+                read_stream,
+                write_stream,
+                InitializationOptions(
+                    server_name="1c-vector-search",
+                    server_version="0.1.0",
+                    capabilities=app.get_capabilities(
+                        notification_options=NotificationOptions(),
+                        experimental_capabilities={},
+                    ),
                 ),
-            ),
-        )
+            )
+    finally:
+        graph_manager.close()
+        logger.info("Графовая БД закрыта")
 
 
 if __name__ == "__main__":

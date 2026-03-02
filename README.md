@@ -10,8 +10,10 @@ MCP-сервер для семантического поиска по коду 
   - `vectordb_manager.py` — работа с ChromaDB
   - `graph_db.py` — граф зависимостей (SQLite)
   - `parser_1c.py` — парсер BSL и XML метаданных 1С
+  - `code_grep.py` — grep по исходникам для find_1c_method_usage
   - `index_config.py` — индексация кода, метаданных, форм и графа
-  - `index_graph.py` — индексация только графа
+  - `index_graph_mp.py` — индексация только графа (с многопроцессорностью, `--workers 1` для однопроцессорного режима)
+  - `index_graph.py` — **[deprecated]** однопроцессорная версия, используйте `index_graph_mp.py`
   - `run_server.py`, `run_indexer.py` — точки входа
 - **Профили** — `projects/your_project/` — шаблон с обезличенными параметрами
 - **Скрипты** — `run_server_your_project.cmd`, `run_index_your_project.cmd` (только векторная БД), `run_index_graph_your_project.cmd` (только граф)
@@ -124,6 +126,36 @@ run_server_your_project.cmd
 
 ---
 
+## Qwen3 через LM Studio / GGUF: предупреждение EOS
+
+При использовании моделей Qwen3-Embedding (например, `text-embedding-qwen3-embedding-4b`) через LM Studio может появляться предупреждение:
+
+```
+[WARNING] At least one last token in strings embedded is not SEP.
+'tokenizer.ggml.add_eos_token' should be set to 'true' in the GGUF header
+```
+
+**Решение:**
+
+1. Добавьте в `.env` файл профиля:
+
+```env
+EMBEDDING_ADD_EOS_MANUAL=true
+```
+
+2. **Переиндексируйте** конфигурацию (эмбеддинги с EOS и без EOS — разные, поиск будет некорректным без переиндексации):
+
+```cmd
+run_index_your_project.cmd
+```
+
+После этого предупреждение в LM Studio исчезнет, и качество эмбеддингов будет корректным.
+
+> Проверка имени модели выполняется case-insensitive: `Qwen3`, `qwen3`, `text-embedding-qwen3-embedding-4b` — все варианты распознаются.
+> Подробнее см. [MODEL_CONFIGURATION_RECOMMENDATIONS.md](projects/your_project/MODEL_CONFIGURATION_RECOMMENDATIONS.md), раздел 5.
+
+---
+
 ## Настройки токенов и чанков
 
 Коэффициент символов на токен для BSL/русского: **2.0** (в `config.py`).
@@ -148,6 +180,28 @@ CHUNK_OVERLAP_TOKENS=100
 
 ---
 
+## Настройки поиска
+
+| Параметр | Описание | По умолчанию |
+|----------|----------|--------------|
+| `VECTOR_DISTANCE_METRIC` | Метрика: `cosine`, `l2`, `ip` | `cosine` |
+| `HYBRID_SEARCH_ALPHA` | Доля векторного поиска (1 — только вектор, 0 — только BM25) | `1.0` |
+| `SEARCH_USE_MMR` | Maximal Marginal Relevance для разнообразия | `false` |
+| `MMR_LAMBDA` | Баланс релевантности/разнообразия (0–1) | `0.5` |
+| `SEARCH_FETCH_K` | Количество кандидатов для re-ranking | `50` |
+
+**Примечание:** Смена `VECTOR_DISTANCE_METRIC` требует переиндексации (`--clear`).
+
+**find_1c_method_usage:** при заданном `CONFIG_PATH` используется grep по исходникам; иначе — семантический поиск.
+
+### Что сделать после обновления
+
+1. **Установить зависимость:** `pip install rank_bm25`
+2. **Переиндексировать** при смене `VECTOR_DISTANCE_METRIC`: `python run_indexer.py --clear --vector-only`
+3. **Для гибридного поиска** задать в `.env`: `HYBRID_SEARCH_ALPHA=0.7`
+
+---
+
 ## Перенос на другую машину
 
 См. [PORTABILITY.md](PORTABILITY.md) — использование `setup_machine.py`, переопределение путей в `*.env.local`.
@@ -156,6 +210,41 @@ CHUNK_OVERLAP_TOKENS=100
 ---
 
 ## История изменений
+
+### 03.03.2026
+
+#### Unit-тесты (pytest):
+- Создана структура `tests/` с `conftest.py` и общими фикстурами (BSL-файлы, дерево конфигурации, временные БД).
+- **test_parser_1c.py** — 20 тестов: парсинг процедур/функций (экспорт, комментарии, параметры, сигнатуры), пустые файлы, модули без процедур, препроцессорные директивы, извлечение ссылок на метаданные (все 10 типов коллекций, дедупликация, case-insensitive), XML-парсинг (реквизиты, модули, синоним, невалидный XML), ConfigurationScanner.
+- **test_graph_db.py** — 22 теста: инициализация и таблицы, add_node (upsert, все типы, extra), add_edge (дедупликация, разные типы, extra), ensure_metadata_node (id-формат, идемпотентность), clear, get_dependencies/get_references (с лимитами, пустые), _escape_like (%, _, \\), get_stats.
+- **test_vectordb_manager.py** — 24 теста: _tokenize (пунктуация, короткие токены, пустая строка), _hybrid_rerank (alpha=1, BM25, сортировка), _apply_mmr (лимит, lambda=1, пустые), add/search code/metadata/forms, clear_all_collections, get_stats, _format_results_from_items, QwenEOSEmbeddingWrapper (EOS-суффикс, дедупликация, name).
+- **test_code_grep.py** — 11 тестов: _extract_object_info_from_path (стандартный, корневой, несвязанный путь), _find_enclosing_method (внутри процедуры/функции, до методов, за пределами, ноль, отрицательный), grep_method_usage (нахождение, отсутствие, лимит, case-insensitive, word boundary, enclosing tracking, бинарные файлы).
+- **test_config.py** — 10 тестов: LOG_LEVEL (uppercase, lowercase, mixed, пустой), validate (пустой/несуществующий/валидный CONFIG_PATH), профили, коллекции, чанкинг.
+- `pytest>=8.0.0` добавлен в `requirements.txt`.
+
+#### index_graph.py → deprecated:
+- **index_graph.py** — добавлен docstring `[DEPRECATED]` и `warnings.warn()` при запуске. Рекомендуется `index_graph_mp.py --workers 1` как замена.
+- **README.md** — `index_graph_mp.py` указан как основной скрипт графовой индексации; `index_graph.py` помечен `[deprecated]`; таблица аргументов объединена (включая `--workers`); добавлены примеры запуска.
+
+#### Qwen3 EOS case-insensitive:
+- **vectordb_manager.py** — проверка `"Qwen3" in Config.EMBEDDING_MODEL` заменена на `"qwen3" in Config.EMBEDDING_MODEL.lower()`. Ранее обёртка `QwenEOSEmbeddingWrapper` не активировалась для моделей вида `text-embedding-qwen3-embedding-4b` (строчные буквы).
+- **config.py** — аналогичная case-insensitive проверка в `show()`.
+- **README.md** — добавлен раздел «Qwen3 через LM Studio / GGUF: предупреждение EOS» с пошаговой инструкцией.
+- **MODEL_CONFIGURATION_RECOMMENDATIONS.md** — в раздел 5 добавлена пошаговая инструкция «Что нужно сделать при появлении предупреждения» и примечание о case-insensitive проверке.
+
+#### Прочие улучшения (из предыдущих ревью):
+- **vectordb_manager.py** — рефакторинг: общая логика поиска (fetch, hybrid re-rank, MMR) вынесена в `_query_collection()`, устранено дублирование в `search_code`, `search_metadata`, `search_forms`.
+- **server.py** — добавлена валидация входных параметров MCP-инструментов (`query`, `method_name`, `object_name` — проверка на пустую строку; `limit` — `try/except` для некорректного типа и `clamp` в допустимый диапазон); `graph_manager.close()` вызывается в `finally` при завершении сервера.
+- **code_grep.py** — оптимизирован `grep_method_usage`: инкрементальное отслеживание `current_method` вместо повторного вызова `_find_enclosing_method` для каждого совпадения (O(N) вместо O(N×M)).
+- **index_graph_mp.py** — формат node ID исправлен на `metadata:{obj_type}:{obj_name}`; перед добавлением ребра вызывается `ensure_metadata_node` для целевого узла; кеш сканирования валидирует `config_path`.
+- **index_graph.py** — кеш сканирования валидирует `config_path` (аналогично `_mp`).
+- **config.py** — `LOG_LEVEL` нормализуется в верхний регистр (`(os.getenv(...) or "INFO").upper()`).
+- **index_config.py** — переменная `l` переименована в `ln` для читаемости.
+- **.gitignore** — добавлены `graph_scan_cache.json`, `graph_checkpoint.json`, `projects/*/graphdb/`.
+- **SERVER_METADATA.json** — добавлено поле `serverVersion: "0.2.0"`.
+- **setup_machine.py**, **init_project.py** — сгенерированные `.cmd` корректно вызывают `index_graph_mp.py` вместо `index_graph.py`.
+
+---
 
 ### 02.03.2026
 
@@ -211,53 +300,36 @@ python run_indexer.py --clear --no-cache
 2. При следующем запуске загружается чекпоинт и индексация продолжается
 3. Успешное завершение удаляет чекпоинт
 
-#### Аргументы командной строки (index_graph.py):
+#### Аргументы командной строки (index_graph_mp.py):
 | Аргумент | Описание |
 |----------|----------|
 | --config-path | Путь к конфигурации 1С |
 | --db-path | Путь к файлу графа |
 | --clear | Очистить граф перед индексацией (сбрасывает чекпоинт) |
 | --no-cache | Игнорировать кэш сканирования и пересканировать файлы |
+| --workers N | Количество процессов (по умолчанию: cpu_count - 1, `--workers 1` для однопроцессорного режима) |
 
-#### Важное замечание о кеше сканирования:
+> **Примечание:** `index_graph.py` (без `_mp`) оставлен для обратной совместимости и помечен как deprecated.
+> Используйте `index_graph_mp.py --workers 1` как полную замену однопроцессорной версии.
 
-**Проблема:** Кеш сканирования (`graph_scan_cache.json`) содержит результаты предыдущего сканирования конфигурации. Текущая версия кеша **не хранит информацию о пути к конфигурации**, поэтому при смене конфигурации старый кеш может быть использован некорректно.
+#### Кеш сканирования:
 
-**Симптомы:** В логах видно правильный путь к конфигурации (например, `D:\ИПФедорова\СТ\Status\CD`), но индексируются метаданные из **другой папки** (например, `D:\ИПФедорова\СТ\Status\CA`).
+Кеш (`graph_scan_cache.json`) содержит путь к конфигурации и автоматически инвалидируется при смене `CONFIG_PATH`. Если нужно принудительно пересканировать, используйте `--no-cache`.
 
-**Решение:**
-1. **При смене конфигурации** всегда используйте `--no-cache`:
-   ```cmd
-   python run_indexer.py --no-cache
-   ```
-2. Или удалите файлы кеша вручную:
-   ```cmd
-   del graph_scan_cache.json
-   del graph_checkpoint.json
-   ```
+#### Примеры запуска:
 
-**Планируемое исправление:** В будущих версиях кеш будет содержать путь к конфигурации и автоматически валидироваться при загрузке.
+```cmd
+# Однопроцессорный режим (эквивалент старого index_graph.py)
+python index_graph_mp.py --workers 1 --clear
 
-#### Многопроцессорность для ускорения индексации:
+# Многопроцессорный режим (8 процессов)
+python index_graph_mp.py --workers 8 --no-cache
 
-Для ускорения индексации графа можно использовать многопроцессорную версию скрипта index_graph_mp.py:
-
-`cmd
-python index_graph_mp.py --workers 8
-`
-
-| Аргумент | Описание |
-|----------|----------|
-| --workers N | Количество процессов (по умолчанию: cpu_count - 1) |
+# Автоматическое определение (cpu_count - 1)
+python index_graph_mp.py --clear
+```
 
 **Ожидаемое ускорение:** 2-4x в зависимости от количества ядер CPU и размера конфигурации.
-
-**Пример:**
-`cmd
-# Использовать 8 процессов
-python index_graph_mp.py --workers 8 --no-cache
-`
-
 
 ---
 
