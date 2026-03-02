@@ -111,6 +111,8 @@
 | **paraphrase-multilingual-MiniLM-L12-v2** | 512 | 512 | 1024 | 512 | 100 | 384 |
 | **Granite Embedding R2** | 8192 | 1024 | 2048 | 1024 | 100 | 768 |
 
+**Qwen3 через LM Studio/GGUF:** добавьте `EMBEDDING_ADD_EOS_MANUAL=true` (см. раздел 5).
+
 ---
 
 ## 4. Примеры конфигурации .env по профилю ПК
@@ -171,7 +173,7 @@ MAX_SEARCH_LIMIT=20
 LOG_LEVEL=INFO
 ```
 
-**Альтернатива (32K контекст):** `Qwen/Qwen3-Embedding-0.6B`, `EMBEDDING_DIMENSION=1024`
+**Альтернатива (32K контекст):** `Qwen/Qwen3-Embedding-0.6B`, `EMBEDDING_DIMENSION=1024`, `EMBEDDING_ADD_EOS_MANUAL=true` (при LM Studio/GGUF)
 
 ---
 
@@ -195,7 +197,7 @@ MAX_SEARCH_LIMIT=25
 LOG_LEVEL=INFO
 ```
 
-**Альтернатива:** `Qwen/Qwen3-Embedding-4B`, `EMBEDDING_DIMENSION=2560`
+**Альтернатива:** `Qwen/Qwen3-Embedding-4B`, `EMBEDDING_DIMENSION=2560`, `EMBEDDING_ADD_EOS_MANUAL=true` (при LM Studio/GGUF)
 
 ---
 
@@ -208,6 +210,8 @@ CONFIG_PATH=C:\path\to\your\1c\config
 EMBEDDING_API_BASE=
 EMBEDDING_MODEL=Qwen/Qwen3-Embedding-8B
 EMBEDDING_DIMENSION=4096
+# При LM Studio/GGUF — устраняет предупреждение "add_eos_token should be true"
+EMBEDDING_ADD_EOS_MANUAL=true
 
 # Максимальный контекст
 EMBEDDING_MAX_TOKENS=4096
@@ -221,7 +225,35 @@ LOG_LEVEL=INFO
 
 ---
 
-## 5. RAG (если планируется)
+## 5. Qwen3 через LM Studio / GGUF: предупреждение EOS
+
+При использовании Qwen3-Embedding через LM Studio (GGUF) может появляться предупреждение:
+
+```
+[WARNING] At least one last token in strings embedded is not SEP.
+'tokenizer.ggml.add_eos_token' should be set to 'true' in the GGUF header
+```
+
+**Причина:** GGUF-модель не добавляет EOS-токен при токенизации; модель ожидает, что строки заканчиваются SEP/EOS.
+
+**Решение:** включите в профиле:
+
+```env
+EMBEDDING_ADD_EOS_MANUAL=true
+```
+
+Проект поддерживает это через `QwenEOSEmbeddingWrapper`: он добавляет `<|endoftext|>` в конец каждой строки перед отправкой в API. LM Studio получает уже строку с EOS и корректно её токенизирует — предупреждение исчезает.
+
+| Модель | EMBEDDING_ADD_EOS_MANUAL |
+|--------|--------------------------|
+| Qwen3-Embedding-* (LM Studio / GGUF) | `true` |
+| nomic, BGE-M3, MiniLM | `false` (по умолчанию) |
+
+**Важно:** Если предупреждение идёт из другого процесса (Panini RAG, отдельный сервер эмбеддингов), там нужно либо передавать строки с EOS вручную, либо пересобрать GGUF с `add_eos_token=true` в заголовке.
+
+---
+
+## 6. RAG (если планируется)
 
 Параметры для передачи контекста в LLM при использовании RAG:
 
@@ -234,7 +266,7 @@ LOG_LEVEL=INFO
 
 ---
 
-## 6. Проверка и валидация
+## 7. Проверка и валидация
 
 ### 6.1 После смены модели — переиндексация
 
@@ -263,7 +295,7 @@ python run_indexer.py --clear --vector-only
 
 ---
 
-## 7. Сводная таблица выбора
+## 8. Сводная таблица выбора
 
 | Критерий | Слабый ПК | Средний ПК | Мощный ПК | Макс. точность |
 |----------|-----------|------------|-----------|----------------|
@@ -275,7 +307,7 @@ python run_indexer.py --clear --vector-only
 
 ---
 
-## 8. Ссылки
+## 9. Ссылки
 
 - [README проекта](../README.md) — общая настройка
 - [MCP_SETUP.md](MCP_SETUP.md) — подключение к Cursor
