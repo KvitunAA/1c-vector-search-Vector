@@ -8,7 +8,7 @@
 - `your_project.env.local` — переопределения для текущей машины (не коммитить)
 - `ИнструкцияПоИспользованиюMCP.md` — описание инструментов для аналитика
 - `MCP_SETUP.md` — инструкция подключения к Cursor
-- `MODEL_CONFIGURATION_RECOMMENDATIONS.md` — выбор моделей эмбеддингов (nomic, BGE-M3, Qwen3), настройка чанков и контекста по объёму RAM. **Qwen3 (LM Studio/GGUF):** `EMBEDDING_ADD_EOS_MANUAL=true`
+- `MODEL_CONFIGURATION_RECOMMENDATIONS.md` — выбор моделей эмбеддингов (nomic, BGE-M3, Qwen3), настройка чанков и контекста по объёму RAM. **Qwen3 (LM Studio/GGUF):** `EMBEDDING_ADD_EOS_MANUAL=false` (по умолчанию — llama.cpp добавляет EOS автоматически)
 
 ## Скрипты индексации (корень репозитория)
 

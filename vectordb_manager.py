@@ -23,7 +23,13 @@ QWEN3_EOS_SUFFIX = "<|endoftext|>"
 
 
 class QwenEOSEmbeddingWrapper:
-    """Обёртка для добавления EOS-токена Qwen3 при EMBEDDING_ADD_EOS_MANUAL=true."""
+    """Обёртка для добавления EOS-токена Qwen3 при EMBEDDING_ADD_EOS_MANUAL=true.
+
+    ВНИМАНИЕ: llama.cpp (LM Studio) уже добавляет EOS автоматически на уровне
+    BPE-токенизатора. Включение EMBEDDING_ADD_EOS_MANUAL=true приведёт к двойному
+    EOS и ухудшению качества эмбеддингов. Рекомендуется оставлять false (по умолчанию).
+    Предупреждение "add_eos_token should be true" — косметическое.
+    """
 
     def __init__(self, base_embedding_fn):
         self._base = base_embedding_fn
@@ -61,9 +67,10 @@ class VectorDBManager:
             )
             if "qwen3" in Config.EMBEDDING_MODEL.lower() and Config.EMBEDDING_ADD_EOS_MANUAL:
                 self.embedding_function = QwenEOSEmbeddingWrapper(base_ef)
-                logger.info(
-                    f"Эмбеддинги через API: {Config.EMBEDDING_API_BASE}, модель: {Config.EMBEDDING_MODEL} "
-                    f"(добавлен EOS-суффикс вручную)"
+                logger.warning(
+                    f"EMBEDDING_ADD_EOS_MANUAL=true для модели {Config.EMBEDDING_MODEL}. "
+                    f"llama.cpp (LM Studio) уже добавляет EOS автоматически — возможен двойной EOS. "
+                    f"Рекомендуется установить EMBEDDING_ADD_EOS_MANUAL=false."
                 )
             else:
                 self.embedding_function = base_ef

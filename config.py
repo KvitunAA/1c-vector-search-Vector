@@ -152,7 +152,13 @@ class Config:
         if cls.EMBEDDING_API_BASE:
             logger.info(f"API эмбеддингов: {cls.EMBEDDING_API_BASE}")
         if "qwen3" in cls.EMBEDDING_MODEL.lower():
-            logger.info(f"EMBEDDING_ADD_EOS_MANUAL: {cls.EMBEDDING_ADD_EOS_MANUAL}")
+            if cls.EMBEDDING_ADD_EOS_MANUAL:
+                logger.warning(
+                    f"EMBEDDING_ADD_EOS_MANUAL=true: llama.cpp уже добавляет EOS автоматически, "
+                    f"возможен двойной EOS. Рекомендуется установить false."
+                )
+            else:
+                logger.info("EMBEDDING_ADD_EOS_MANUAL: false (EOS добавляется llama.cpp автоматически)")
         if cls.EMBEDDING_MAX_TOKENS:
             logger.info(f"EMBEDDING_MAX_TOKENS: {cls.EMBEDDING_MAX_TOKENS} → EMBEDDING_MAX_CHARS: {cls.EMBEDDING_MAX_CHARS}")
         elif cls.EMBEDDING_MAX_CHARS > 0:

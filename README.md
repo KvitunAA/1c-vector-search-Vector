@@ -135,22 +135,16 @@ run_server_your_project.cmd
 'tokenizer.ggml.add_eos_token' should be set to 'true' in the GGUF header
 ```
 
-**Решение:**
+**Это предупреждение косметическое** и на качество эмбеддингов не влияет. llama.cpp (бэкенд LM Studio) **уже добавляет EOS-токен автоматически** на уровне BPE-токенизатора.
 
-1. Добавьте в `.env` файл профиля:
+**Важно:** параметр `EMBEDDING_ADD_EOS_MANUAL` должен быть **false** (или не задан). Если установить `true`, `QwenEOSEmbeddingWrapper` добавит `<|endoftext|>` в текст, а llama.cpp добавит второй EOS — получится **двойной EOS**, что ухудшит качество эмбеддингов.
 
 ```env
-EMBEDDING_ADD_EOS_MANUAL=true
+# Правильно (по умолчанию):
+EMBEDDING_ADD_EOS_MANUAL=false
 ```
 
-2. **Переиндексируйте** конфигурацию (эмбеддинги с EOS и без EOS — разные, поиск будет некорректным без переиндексации):
-
-```cmd
-run_index_your_project.cmd
-```
-
-После этого предупреждение в LM Studio исчезнет, и качество эмбеддингов будет корректным.
-
+> Если ранее вы использовали `EMBEDDING_ADD_EOS_MANUAL=true`, переиндексируйте с `--clear`, чтобы пересоздать эмбеддинги без двойного EOS.
 > Проверка имени модели выполняется case-insensitive: `Qwen3`, `qwen3`, `text-embedding-qwen3-embedding-4b` — все варианты распознаются.
 > Подробнее см. [MODEL_CONFIGURATION_RECOMMENDATIONS.md](projects/your_project/MODEL_CONFIGURATION_RECOMMENDATIONS.md), раздел 5.
 
@@ -226,11 +220,14 @@ CHUNK_OVERLAP_TOKENS=100
 - **index_graph.py** — добавлен docstring `[DEPRECATED]` и `warnings.warn()` при запуске. Рекомендуется `index_graph_mp.py --workers 1` как замена.
 - **README.md** — `index_graph_mp.py` указан как основной скрипт графовой индексации; `index_graph.py` помечен `[deprecated]`; таблица аргументов объединена (включая `--workers`); добавлены примеры запуска.
 
-#### Qwen3 EOS case-insensitive:
-- **vectordb_manager.py** — проверка `"Qwen3" in Config.EMBEDDING_MODEL` заменена на `"qwen3" in Config.EMBEDDING_MODEL.lower()`. Ранее обёртка `QwenEOSEmbeddingWrapper` не активировалась для моделей вида `text-embedding-qwen3-embedding-4b` (строчные буквы).
-- **config.py** — аналогичная case-insensitive проверка в `show()`.
-- **README.md** — добавлен раздел «Qwen3 через LM Studio / GGUF: предупреждение EOS» с пошаговой инструкцией.
-- **MODEL_CONFIGURATION_RECOMMENDATIONS.md** — в раздел 5 добавлена пошаговая инструкция «Что нужно сделать при появлении предупреждения» и примечание о case-insensitive проверке.
+#### Qwen3 EOS — исправление двойного EOS:
+- **Проблема:** llama.cpp (LM Studio) уже добавляет EOS-токен автоматически на уровне BPE-токенизатора. `QwenEOSEmbeddingWrapper` при `EMBEDDING_ADD_EOS_MANUAL=true` добавлял `<|endoftext|>` в текст — получался двойной EOS, ухудшающий качество эмбеддингов.
+- **Решение:** `EMBEDDING_ADD_EOS_MANUAL` по умолчанию `false`. При включении — выводится `logger.warning` о двойном EOS.
+- **vectordb_manager.py** — docstring `QwenEOSEmbeddingWrapper` дополнен предупреждением о двойном EOS; при активации wrapper выводится `logger.warning` вместо `logger.info`; case-insensitive проверка модели.
+- **config.py** — при `EMBEDDING_ADD_EOS_MANUAL=true` для Qwen3 выводится `logger.warning` с рекомендацией отключить.
+- **your_project.env** — комментарий обновлён: рекомендуется `false`, пояснение о двойном EOS.
+- **README.md** — раздел «Qwen3 через LM Studio / GGUF: предупреждение EOS» переписан: предупреждение объяснено как косметическое, `EMBEDDING_ADD_EOS_MANUAL=false` как рекомендация.
+- **MODEL_CONFIGURATION_RECOMMENDATIONS.md** — раздел 5 полностью переписан: объяснение механизма двойного EOS, рекомендация `false`, инструкция миграции с `--clear`.
 
 #### Прочие улучшения (из предыдущих ревью):
 - **vectordb_manager.py** — рефакторинг: общая логика поиска (fetch, hybrid re-rank, MMR) вынесена в `_query_collection()`, устранено дублирование в `search_code`, `search_metadata`, `search_forms`.
@@ -258,7 +255,7 @@ CHUNK_OVERLAP_TOKENS=100
 - **MODEL_CONFIGURATION_RECOMMENDATIONS.md** — рекомендации по выбору моделей эмбеддингов (nomic, BGE-M3, Qwen3), настройке чанков и контекста в зависимости от объёма RAM (8/16/32/48 GB).
 - **Раздельная индексация** — `run_index_vector_*.cmd` (только векторная БД), `run_index_graph_*.cmd` (только граф). Полная индексация — `python run_indexer.py --clear` без `--vector-only`.
 - **init_project.py** — создание нового проекта: `python init_project.py -n my_project -c "D:\Path\To\1C\Config" --add-mcp --index -y`.
-- **EMBEDDING_ADD_EOS_MANUAL для Qwen3** — в MCP_SETUP, README профиля, `your_project.env` и `projects/README.md` добавлены инструкции: при Qwen3 через LM Studio/GGUF раскомментировать и установить `EMBEDDING_ADD_EOS_MANUAL=true` (устраняет предупреждение EOS).
+- **EMBEDDING_ADD_EOS_MANUAL для Qwen3** — в MCP_SETUP, README профиля, `your_project.env` и `projects/README.md` добавлены инструкции. **Обновление:** рекомендуется `false` (по умолчанию) — llama.cpp добавляет EOS автоматически; `true` приводит к двойному EOS (см. запись 03.03.2026).
 
 ---
 
