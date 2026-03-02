@@ -144,6 +144,8 @@ CHUNK_MAX_TOKENS=512
 CHUNK_OVERLAP_TOKENS=100
 ```
 
+**Подробные рекомендации** по выбору модели, чанкам и конфигурации ПК см. в [MODEL_CONFIGURATION_RECOMMENDATIONS.md](projects/your_project/MODEL_CONFIGURATION_RECOMMENDATIONS.md).
+
 ---
 
 ## Перенос на другую машину
@@ -161,6 +163,12 @@ CHUNK_OVERLAP_TOKENS=100
 - **config.py** — добавлена поддержка вложенных путей профилей (например, `esty\osn` → `projects/esty/osn/osn.env`). Имя файла `.env` берётся из `Path(profile_name).name`.
 - **index_graph_mp.py** — исправлена ошибка в progress bar: удалён дублирующий параметр `total` в вызове `tqdm()`. Ранее указывалось `total=len(args), initial=start_mod_idx, total=len(modules_data)`, что приводило к некорректному отображению прогресса. Теперь используется `total=len(modules_data), initial=start_mod_idx`.
 - **Синхронизация** — все `.py` файлы приведены в соответствие с версией из D:\Vibe1c\Vector.
+
+#### Структура проектов и документация:
+- **projects/** — каждая подпапка `projects/<имя>/` содержит `.env`, `vectordb/`, `graphdb/` и документацию профиля.
+- **MODEL_CONFIGURATION_RECOMMENDATIONS.md** — рекомендации по выбору моделей эмбеддингов (nomic, BGE-M3, Qwen3), настройке чанков и контекста в зависимости от объёма RAM (8/16/32/48 GB).
+- **Раздельная индексация** — `run_index_vector_*.cmd` (только векторная БД), `run_index_graph_*.cmd` (только граф). Полная индексация — `python run_indexer.py --clear` без `--vector-only`.
+- **init_project.py** — создание нового проекта: `python init_project.py -n my_project -c "D:\Path\To\1C\Config" --add-mcp --index -y`.
 
 ---
 
