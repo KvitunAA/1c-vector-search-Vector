@@ -20,7 +20,8 @@ def load_profile(profile_name: str = None):
     if profile_name is None:
         profile_name = os.getenv("PROJECT_PROFILE", "default")
 
-    profile_path = PROJECT_ROOT / "projects" / profile_name / f"{profile_name}.env"
+    # Поддержка вложенных путей: esty\osn → projects/esty/osn/osn.env
+    profile_path = PROJECT_ROOT / "projects" / profile_name / f"{Path(profile_name).name}.env"
 
     if not profile_path.exists():
         logger.warning(f"Профиль '{profile_name}' не найден по пути {profile_path}")
@@ -29,7 +30,7 @@ def load_profile(profile_name: str = None):
         logger.info(f"Загружен профиль: {profile_name} из {profile_path}")
         load_dotenv(profile_path, override=True)
 
-    profile_local = profile_path.parent / f"{profile_name}.env.local"
+    profile_local = profile_path.parent / f"{Path(profile_name).name}.env.local"
     if profile_local.exists():
         load_dotenv(profile_local, override=True)
         logger.info(f"Применены переопределения из {profile_local}")

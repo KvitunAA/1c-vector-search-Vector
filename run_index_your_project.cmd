@@ -1,9 +1,12 @@
 @echo off
 chcp 65001 >nul
-REM Индексация your_project: пути из projects/your_project/*.env или *.env.local
+REM Индексация только векторной БД (код, метаданные, формы); граф пропускается
+REM Для индексации графа используйте run_index_graph_your_project.cmd
 
 set "SCRIPT_DIR=%~dp0"
 cd /d "%SCRIPT_DIR%"
+
+REM Определяем путь к Python
 if exist "%SCRIPT_DIR%local.env" for /f "usebackq eol=# tokens=1,* delims==" %%a in ("%SCRIPT_DIR%local.env") do if "%%a"=="VECTOR_PYTHON_PATH" set "VECTOR_PYTHON_PATH=%%b"
 
 set PROJECT_PROFILE=your_project
@@ -13,4 +16,4 @@ set GRAPHDB_PATH=%SCRIPT_DIR%projects\your_project\graphdb\graph.db
 set "PYTHON=python"
 if defined VECTOR_PYTHON_PATH set "PYTHON=%VECTOR_PYTHON_PATH%"
 
-"%PYTHON%" "%SCRIPT_DIR%run_indexer.py" --clear
+"%PYTHON%" "%SCRIPT_DIR%run_indexer.py" --clear --vector-only

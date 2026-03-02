@@ -32,22 +32,22 @@ class ConfigIndexer:
         config_path: str,
         db_path: str = None,
         clear_existing: bool = False,
-        skip_graph: bool = False,
     ):
         self.config_path = Path(config_path)
         self.scanner = ConfigurationScanner(self.config_path)
         self.db_manager = VectorDBManager(db_path)
-        self.skip_graph = skip_graph
 
         if clear_existing:
             logger.info("Очистка существующей векторной БД...")
             self.db_manager.clear_all_collections()
 
-    def index_all(self):
+    def index_all(self, vector_only: bool = False):
         """Полная индексация конфигурации"""
         logger.info("=" * 80)
         logger.info("Начало индексации конфигурации 1С")
         logger.info(f"Путь к конфигурации: {self.config_path}")
+        if vector_only:
+            logger.info("Режим: только векторная БД (граф пропускается)")
         logger.info("=" * 80)
 
         logger.info("\n[1/4] Индексация модулей и кода...")
@@ -59,12 +59,12 @@ class ConfigIndexer:
         logger.info("\n[3/4] Индексация форм...")
         forms_count = self._index_forms()
 
-        if self.skip_graph:
-            logger.info("\n[4/4] Индексация графа — пропущена (--skip-graph)")
-            graph_stats = {"nodes_count": 0, "edges_count": 0}
-        else:
+        graph_stats = {"nodes_count": 0, "edges_count": 0}
+        if not vector_only:
             logger.info("\n[4/4] Индексация графа связей...")
             graph_stats = self._index_graph()
+        else:
+            logger.info("\n[4/4] Граф пропущен (--vector-only)")
 
         logger.info("\n" + "=" * 80)
         logger.info("Индексация завершена!")
@@ -191,9 +191,9 @@ def main():
         help='Очистить существующую БД перед индексацией'
     )
     parser.add_argument(
-        '--skip-graph',
+        '--vector-only',
         action='store_true',
-        help='Индексировать только векторную БД (код, метаданные, формы), без графа'
+        help='Индексировать только векторную БД (код, метаданные, формы); граф пропускается'
     )
 
     args = parser.parse_args()
@@ -214,9 +214,8 @@ def main():
             config_path=args.config_path,
             db_path=args.db_path,
             clear_existing=args.clear,
-            skip_graph=args.skip_graph,
         )
-        indexer.index_all()
+        indexer.index_all(vector_only=args.vector_only)
     except KeyboardInterrupt:
         logger.warning("\nИндексация прервана пользователем")
         sys.exit(1)

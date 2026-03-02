@@ -13,4 +13,4 @@ set GRAPHDB_PATH=%SCRIPT_DIR%projects\your_project\graphdb\graph.db
 set "PYTHON=python"
 if defined VECTOR_PYTHON_PATH set "PYTHON=%VECTOR_PYTHON_PATH%"
 
-"%PYTHON%" "%SCRIPT_DIR%run_indexer.py" --clear --skip-graph
+"%PYTHON%" "%SCRIPT_DIR%run_indexer.py" --clear --vector-only
