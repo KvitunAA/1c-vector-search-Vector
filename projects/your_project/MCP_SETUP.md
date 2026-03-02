@@ -3,7 +3,7 @@
 ## Шаги настройки
 
 1. **Переименуйте профиль** — замените `your_project` на имя вашего проекта (например, `Vector`).
-2. **Настройте `your_project.env`** — укажите `CONFIG_PATH` (путь к выгрузке конфигурации 1С) и параметры эмбеддингов.
+2. **Настройте `your_project.env`** — укажите `CONFIG_PATH` (путь к выгрузке конфигурации 1С) и параметры эмбеддингов. **При Qwen3 через LM Studio/GGUF** раскомментируйте и установите `EMBEDDING_ADD_EOS_MANUAL=true` (см. [MODEL_CONFIGURATION_RECOMMENDATIONS.md](MODEL_CONFIGURATION_RECOMMENDATIONS.md), раздел 5).
 3. **Переименуйте .cmd-скрипты** — `run_server_your_project.cmd` → `run_server_<имя>.cmd` и т.д., либо используйте `init_project.py` для создания нового проекта.
 
 ## Подключение в Cursor
