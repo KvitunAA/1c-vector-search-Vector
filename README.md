@@ -161,6 +161,11 @@ EMBEDDING_ADD_EOS_MANUAL=false
 | `CHUNK_OVERLAP_TOKENS` | В `.env` профиля | Нахлёст между чанками в токенах. По умолчанию: `100` |
 | `CHUNK_MAX_CHARS` | Альтернатива | Макс. символов в чанке, если не задан `CHUNK_MAX_TOKENS` |
 | `EMBEDDING_MAX_CHARS` | Альтернатива | Макс. символов для обрезки, если не задан `EMBEDDING_MAX_TOKENS` |
+| `BATCH_SIZE_CODE` | В `.env` профиля | Размер батча при индексации кода. По умолчанию: `100`. Для 8 GB RAM: `25` |
+| `BATCH_SIZE_METADATA` | В `.env` профиля | Размер батча при индексации метаданных. По умолчанию: `50`. Для 8 GB RAM: `20` |
+| `BATCH_SIZE_FORMS` | В `.env` профиля | Размер батча при индексации форм. По умолчанию: `50`. Для 8 GB RAM: `20` |
+
+> **Батчи и производительность:** больший батч = быстрее индексация (меньше запросов к API/модели), но выше пиковое потребление RAM. Рекомендации по конфигурациям ПК — в [MODEL_CONFIGURATION_RECOMMENDATIONS.md](projects/your_project/MODEL_CONFIGURATION_RECOMMENDATIONS.md), раздел 2.5.
 
 ### Пример для nomic-embed-text-v2-moe (Context Length 512 токенов)
 

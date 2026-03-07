@@ -127,7 +127,9 @@ class VectorDBManager:
                 logger.warning(f"Не удалось удалить коллекцию {name}: {e}")
         self._init_collections()
 
-    def add_code_chunks(self, chunks: List[Dict], batch_size: int = 100):
+    def add_code_chunks(self, chunks: List[Dict], batch_size: int = None):
+        if batch_size is None:
+            batch_size = getattr(Config, "BATCH_SIZE_CODE", 100)
         collection = self.collections["code"]
         for i in range(0, len(chunks), batch_size):
             batch = chunks[i:i + batch_size]
@@ -200,7 +202,9 @@ class VectorDBManager:
             text_parts.append(f"Команды: {', '.join(obj['commands'])}")
         return "\n".join(text_parts)
 
-    def add_metadata_objects(self, metadata_objects: List[Dict], batch_size: int = 50):
+    def add_metadata_objects(self, metadata_objects: List[Dict], batch_size: int = None):
+        if batch_size is None:
+            batch_size = getattr(Config, "BATCH_SIZE_METADATA", 50)
         collection = self.collections["metadata"]
         for i in range(0, len(metadata_objects), batch_size):
             batch = metadata_objects[i:i + batch_size]
@@ -238,7 +242,9 @@ class VectorDBManager:
             except Exception as e:
                 logger.error(f"Ошибка добавления метаданных в БД: {e}")
 
-    def add_forms(self, forms: List[Dict], batch_size: int = 50):
+    def add_forms(self, forms: List[Dict], batch_size: int = None):
+        if batch_size is None:
+            batch_size = getattr(Config, "BATCH_SIZE_FORMS", 50)
         collection = self.collections["forms"]
         for i in range(0, len(forms), batch_size):
             batch = forms[i:i + batch_size]

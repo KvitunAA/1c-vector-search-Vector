@@ -45,8 +45,11 @@
 | **Эмбеддинги** | LM Studio / LocalAI (удалённый API) | sentence-transformers: `paraphrase-multilingual-MiniLM-L12-v2` (~420 MB) |
 | **Модель эмбеддингов** | nomic-embed-text-v2-moe (512 токенов) | MiniLM-L12 (512 токенов) |
 | **LLM для RAG** | Qwen2.5-1.5B-Instruct (Q4_K_M) ~2.5 GB RAM | Qwen2.5-0.5B при нехватке RAM |
+| **BATCH_SIZE_CODE** | 25 | 10 (если swap) |
+| **BATCH_SIZE_METADATA** | 20 | 10 |
+| **BATCH_SIZE_FORMS** | 20 | 10 |
 
-**Ограничения:** Локальный запуск embedding + LLM одновременно может перегрузить память. Рекомендуется API на другом хосте или только embedding локально.
+**Ограничения:** Локальный запуск embedding + LLM одновременно может перегрузить память. Рекомендуется API на другом хосте или только embedding локально. Малые батчи снижают пиковое потребление RAM за счёт скорости индексации.
 
 ---
 
@@ -57,6 +60,9 @@
 | **Эмбеддинги** | Локально: sentence-transformers | LM Studio / LocalAI |
 | **Модель эмбеддингов** | nomic-embed-text-v1.5 (8192 токена) | nomic-embed-text-v1, Qwen3-Embedding-0.6B |
 | **LLM для RAG** | Qwen2.5-3B или 7B (Q4) | Phi-2, Mistral-7B |
+| **BATCH_SIZE_CODE** | 50 | 100 (если GPU) |
+| **BATCH_SIZE_METADATA** | 50 | — |
+| **BATCH_SIZE_FORMS** | 50 | — |
 
 ---
 
@@ -66,6 +72,9 @@
 |-----------|--------------|--------------|
 | **Эмбеддинги** | BGE-M3 или Qwen3-Embedding-4B | nomic-embed-text-v1.5 |
 | **LLM для RAG** | Qwen2.5-7B, Llama-3-8B, Mistral-7B | — |
+| **BATCH_SIZE_CODE** | 100 | 200 |
+| **BATCH_SIZE_METADATA** | 100 | 150 |
+| **BATCH_SIZE_FORMS** | 100 | 150 |
 
 ---
 
@@ -75,6 +84,9 @@
 |-----------|--------------|
 | **Эмбеддинги** | Qwen3-Embedding-8B (MTEB 70.58) |
 | **LLM для RAG** | Qwen2.5-7B, Llama-3-8B, Mistral-7B |
+| **BATCH_SIZE_CODE** | 200 |
+| **BATCH_SIZE_METADATA** | 150 |
+| **BATCH_SIZE_FORMS** | 150 |
 
 **Ресурсы для максимальной точности индексации 1С:**
 
@@ -86,6 +98,19 @@
 | **Итого RAM** | 8 GB | 16–24 GB | 32–48 GB |
 
 **Оценка объёма конфигурации 1С:** малая (ЗУП, УТ) ~5–15K процедур; средняя (ERP) ~30–80K; крупная с доработками 100K+.
+
+### 2.5 Сводная таблица рекомендуемых батчей
+
+| Конфигурация ПК | BATCH_SIZE_CODE | BATCH_SIZE_METADATA | BATCH_SIZE_FORMS | Обоснование |
+|-----------------|-----------------|---------------------|------------------|-------------|
+| **8 GB RAM, без GPU** | 25 | 20 | 20 | Минимум RAM, индексация медленнее но стабильнее |
+| **16 GB RAM** | 50 | 50 | 50 | Баланс скорости и памяти |
+| **32 GB RAM, GPU 8+** | 100 | 100 | 100 | Дефолт; быстрая индексация |
+| **48+ GB RAM, GPU 16+** | 200 | 150 | 150 | Максимальная скорость индексации |
+
+> **Как работают батчи:** при индексации ChromaDB вычисляет эмбеддинги для всех документов в батче одним запросом к API/модели. Больший батч = меньше HTTP-запросов = быстрее, но выше пиковое потребление RAM. При `OutOfMemoryError` или замедлении — уменьшайте батч вдвое.
+>
+> Для **удалённого API** (LM Studio, OpenAI) батч также влияет на размер HTTP-запроса. Некоторые серверы имеют лимит на количество текстов в одном запросе — при ошибках `413 Payload Too Large` уменьшайте `BATCH_SIZE_CODE`.
 
 ---
 
@@ -136,6 +161,11 @@ EMBEDDING_MAX_TOKENS=512
 CHUNK_MAX_TOKENS=512
 CHUNK_OVERLAP_TOKENS=100
 
+# === Батчи (уменьшены для экономии RAM) ===
+BATCH_SIZE_CODE=25
+BATCH_SIZE_METADATA=20
+BATCH_SIZE_FORMS=20
+
 # === Поиск ===
 DEFAULT_SEARCH_LIMIT=5
 MAX_SEARCH_LIMIT=20
@@ -147,10 +177,12 @@ LOG_LEVEL=INFO
 ```env
 EMBEDDING_API_BASE=
 EMBEDDING_MODEL=paraphrase-multilingual-MiniLM-L12-v2
-EMBEDDING_DIMENSION=384
 EMBEDDING_MAX_TOKENS=512
 CHUNK_MAX_TOKENS=512
 CHUNK_OVERLAP_TOKENS=100
+BATCH_SIZE_CODE=25
+BATCH_SIZE_METADATA=20
+BATCH_SIZE_FORMS=20
 ```
 
 ---
@@ -169,6 +201,11 @@ EMBEDDING_DIMENSION=768
 EMBEDDING_MAX_TOKENS=1024
 CHUNK_MAX_TOKENS=1024
 CHUNK_OVERLAP_TOKENS=100
+
+# Батчи (баланс скорости и памяти)
+BATCH_SIZE_CODE=50
+BATCH_SIZE_METADATA=50
+BATCH_SIZE_FORMS=50
 
 DEFAULT_SEARCH_LIMIT=5
 MAX_SEARCH_LIMIT=20
@@ -193,6 +230,11 @@ EMBEDDING_DIMENSION=1024
 EMBEDDING_MAX_TOKENS=2048
 CHUNK_MAX_TOKENS=2048
 CHUNK_OVERLAP_TOKENS=150
+
+# Батчи (быстрая индексация при достатке RAM)
+BATCH_SIZE_CODE=100
+BATCH_SIZE_METADATA=100
+BATCH_SIZE_FORMS=100
 
 DEFAULT_SEARCH_LIMIT=7
 MAX_SEARCH_LIMIT=25
@@ -219,6 +261,11 @@ EMBEDDING_DIMENSION=4096
 EMBEDDING_MAX_TOKENS=4096
 CHUNK_MAX_TOKENS=4096
 CHUNK_OVERLAP_TOKENS=150
+
+# Батчи (максимальная скорость, большие модели = больше RAM на батч)
+BATCH_SIZE_CODE=200
+BATCH_SIZE_METADATA=150
+BATCH_SIZE_FORMS=150
 
 DEFAULT_SEARCH_LIMIT=10
 MAX_SEARCH_LIMIT=25

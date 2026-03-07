@@ -178,6 +178,10 @@ class Config:
         "ПланСчетов": "ChartsOfAccounts"
     }
 
+    BATCH_SIZE_CODE = int(os.getenv("BATCH_SIZE_CODE", "100"))
+    BATCH_SIZE_METADATA = int(os.getenv("BATCH_SIZE_METADATA", "50"))
+    BATCH_SIZE_FORMS = int(os.getenv("BATCH_SIZE_FORMS", "50"))
+
     DEFAULT_SEARCH_LIMIT = int(os.getenv("DEFAULT_SEARCH_LIMIT", "5"))
     MAX_SEARCH_LIMIT = int(os.getenv("MAX_SEARCH_LIMIT", "20"))
 
@@ -241,6 +245,7 @@ class Config:
         logger.info(f"Чанки: {chunk_info}, нахлёст {cls.CHUNK_OVERLAP_TOKENS} токенов (~{cls.CHUNK_OVERLAP_CHARS} символов)")
         logger.info(f"Лимит поиска по умолчанию: {cls.DEFAULT_SEARCH_LIMIT}")
         logger.info(f"Максимальный лимит поиска: {cls.MAX_SEARCH_LIMIT}")
+        logger.info(f"Батчи индексации: код={cls.BATCH_SIZE_CODE}, метаданные={cls.BATCH_SIZE_METADATA}, формы={cls.BATCH_SIZE_FORMS}")
         logger.info(f"Метрика расстояния: {cls.VECTOR_DISTANCE_METRIC}")
         logger.info(f"Гибридный поиск alpha: {cls.HYBRID_SEARCH_ALPHA}, MMR: {cls.SEARCH_USE_MMR}")
         logger.info(f"Уровень логирования: {cls.LOG_LEVEL}")
